@@ -38,9 +38,15 @@ const BAR_COLOR: Record<LicenseStatus, string> = {
   overdue: "bg-bad",
 };
 
-export function DashboardMockup() {
+export function DashboardMockup({
+  filterRows,
+}: {
+  filterRows?: (rows: LicenseRow[]) => LicenseRow[];
+} = {}) {
   const [rows, setRows] = useState<LicenseRow[]>(SEED_ROWS);
   const [tick, setTick] = useState(0);
+
+  const visible = filterRows ? filterRows(rows) : rows;
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -97,7 +103,12 @@ export function DashboardMockup() {
 
         {/* rows */}
         <ul className="divide-y divide-hairline">
-          {rows.map((row) => {
+          {visible.length === 0 && (
+            <li className="px-5 py-8 text-center font-mono text-[12px] text-body">
+              No licenses match the current filter.
+            </li>
+          )}
+          {visible.map((row) => {
             const s = statusFor(row.daysRemaining);
             const pct = Math.max(
               0,

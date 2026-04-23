@@ -11,6 +11,10 @@
   --hairline: rgba(0, 0, 0, 0.08);
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 html,
 body {
   background: var(--bg);

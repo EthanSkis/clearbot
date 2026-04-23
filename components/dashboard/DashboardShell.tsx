@@ -1,0 +1,437 @@
+"use client";
+
+import { useState, type ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import clsx from "clsx";
+import { Logo } from "@/components/ui/Logo";
+import { Pill } from "@/components/ui/Pill";
+
+type IconName =
+  | "grid"
+  | "pin"
+  | "calendar"
+  | "doc"
+  | "folder"
+  | "bank"
+  | "users"
+  | "plug"
+  | "card"
+  | "gear";
+
+type NavItem = {
+  label: string;
+  href: string;
+  icon: IconName;
+  badge?: string;
+};
+
+const NAV: NavItem[] = [
+  { label: "Overview", href: "/dashboard", icon: "grid" },
+  { label: "Locations", href: "/dashboard/locations", icon: "pin", badge: "38" },
+  { label: "Renewals", href: "/dashboard/renewals", icon: "calendar", badge: "14" },
+  { label: "Filings", href: "/dashboard/filings", icon: "doc" },
+  { label: "Documents", href: "/dashboard/documents", icon: "folder" },
+  { label: "Agencies", href: "/dashboard/agencies", icon: "bank" },
+  { label: "Team", href: "/dashboard/team", icon: "users" },
+  { label: "Integrations", href: "/dashboard/integrations", icon: "plug" },
+  { label: "Billing", href: "/dashboard/billing", icon: "card" },
+  { label: "Settings", href: "/dashboard/settings", icon: "gear" },
+];
+
+function isActive(pathname: string, href: string) {
+  if (href === "/dashboard") return pathname === "/dashboard";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+export function DashboardShell({ children }: { children: ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname() || "/dashboard";
+
+  return (
+    <div className="flex min-h-screen bg-bgalt">
+      <aside
+        className={clsx(
+          "fixed inset-y-0 left-0 z-40 w-[240px] shrink-0 border-r border-hairline bg-white transition-transform md:sticky md:top-0 md:h-screen md:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="flex h-16 items-center gap-2 border-b border-hairline px-5">
+          <Link href="/" className="flex items-center gap-2">
+            <Logo size={22} />
+            <span className="font-sans text-[15px] font-semibold tracking-tight text-ink">
+              ClearBot
+            </span>
+          </Link>
+        </div>
+
+        <div className="border-b border-hairline px-3 py-3">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 rounded-md border border-hairline bg-bgalt px-3 py-2 text-left transition-colors hover:bg-white"
+          >
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-body">
+                Workspace
+              </div>
+              <div className="truncate text-[13px] font-medium text-ink">
+                Meridian Restaurant Group
+              </div>
+            </div>
+            <Chevron />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-2 py-3">
+          <ul className="space-y-0.5">
+            {NAV.map((item) => {
+              const active = isActive(pathname, item.href);
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={clsx(
+                      "flex items-center justify-between gap-2 rounded-md px-3 py-2 text-[13px] font-medium transition-colors",
+                      active
+                        ? "bg-accent-soft text-accent-deep"
+                        : "text-body hover:bg-bgalt hover:text-ink"
+                    )}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <NavIcon name={item.icon} />
+                      {item.label}
+                    </span>
+                    {item.badge && (
+                      <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[10px] text-body ring-1 ring-hairline">
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-6 px-3">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">
+              Automation mode
+            </div>
+            <div className="mt-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-accent-deep">
+                  Auto
+                </span>
+                <Pill tone="accent" withDot>
+                  On
+                </Pill>
+              </div>
+              <p className="mt-1 text-[11px] leading-[1.4] text-body">
+                Filings submit automatically. Switch per-license any time.
+              </p>
+            </div>
+          </div>
+        </nav>
+
+        <div className="border-t border-hairline p-3">
+          <div className="flex items-center gap-2.5 rounded-md bg-bgalt px-2.5 py-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-white">
+              DR
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium text-ink">
+                Diana Reyes
+              </div>
+              <div className="truncate font-mono text-[10px] text-body">
+                Director of Ops
+              </div>
+            </div>
+            <Link
+              href="/"
+              className="rounded p-1 text-body hover:bg-white hover:text-ink"
+              aria-label="Sign out"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </aside>
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-ink/20 md:hidden"
+        />
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 border-b border-hairline bg-white/90 backdrop-blur">
+          <div className="flex h-16 items-center gap-3 px-4 md:px-8">
+            <button
+              type="button"
+              aria-label="Open sidebar"
+              onClick={() => setSidebarOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-md border border-hairline md:hidden"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+
+            <div className="relative hidden max-w-[440px] flex-1 md:block">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-body">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </span>
+              <input
+                type="search"
+                placeholder="Search licenses, locations, agencies…"
+                className="h-9 w-full rounded-md border border-hairline bg-bgalt pl-9 pr-20 font-sans text-[13px] text-ink outline-none transition-colors placeholder:text-body/70 focus:border-accent focus:bg-white"
+              />
+              <kbd className="pointer-events-none absolute inset-y-0 right-2 my-auto flex h-5 items-center rounded border border-hairline bg-white px-1.5 font-mono text-[10px] text-body">
+                ⌘K
+              </kbd>
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              <TopBarButton label="What's new" icon="sparkle" />
+              <TopBarButton label="Notifications" icon="bell" dot />
+              <a
+                href="#"
+                className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                New location
+              </a>
+            </div>
+          </div>
+
+          <Breadcrumb pathname={pathname} />
+        </header>
+
+        <main className="flex-1 space-y-8 px-4 py-6 md:px-8 md:py-8">
+          {children}
+
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline pt-6 font-mono text-[11px] text-body">
+            <div className="flex items-center gap-3">
+              <span>© {new Date().getFullYear()} ClearBot, Inc.</span>
+              <span className="text-hairline">·</span>
+              <a href="#" className="hover:text-ink">Status</a>
+              <span className="text-hairline">·</span>
+              <a href="#" className="hover:text-ink">Changelog</a>
+              <span className="text-hairline">·</span>
+              <a href="#" className="hover:text-ink">Docs</a>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-accent-deep">
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                All systems normal
+              </span>
+            </div>
+          </footer>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function Breadcrumb({ pathname }: { pathname: string }) {
+  const current = NAV.find((n) => isActive(pathname, n.href)) ?? NAV[0];
+  const tabs = tabsFor(current.label);
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto px-4 md:px-8">
+      {tabs.map((t, i) => (
+        <a
+          key={t}
+          href="#"
+          className={clsx(
+            "relative -mb-px border-b-2 px-3 py-2.5 font-sans text-[13px] font-medium transition-colors",
+            i === 0
+              ? "border-ink text-ink"
+              : "border-transparent text-body hover:text-ink"
+          )}
+        >
+          {t}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function tabsFor(label: string): string[] {
+  switch (label) {
+    case "Overview":
+      return ["Overview", "Renewals", "Filings", "Documents", "Reports"];
+    case "Locations":
+      return ["All locations", "By state", "Managers", "Tags", "Archived"];
+    case "Renewals":
+      return ["Upcoming", "Calendar", "By agency", "Overdue", "Completed"];
+    case "Filings":
+      return ["Queue", "History", "Approvals", "Receipts", "Errors"];
+    case "Documents":
+      return ["Library", "Receipts", "Certificates", "Correspondence", "Trash"];
+    case "Agencies":
+      return ["Monitor", "Knowledge base", "Forms", "Changes", "Fee schedules"];
+    case "Team":
+      return ["Members", "Roles", "Activity", "Invites", "SSO"];
+    case "Integrations":
+      return ["Connected", "Catalog", "Webhooks", "API keys", "Events"];
+    case "Billing":
+      return ["Plan", "Invoices", "Payment", "Usage", "Contracts"];
+    case "Settings":
+      return ["General", "Security", "Notifications", "Developer", "Danger"];
+    default:
+      return ["Overview"];
+  }
+}
+
+function TopBarButton({
+  label,
+  icon,
+  dot,
+}: {
+  label: string;
+  icon: "bell" | "sparkle";
+  dot?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className="relative flex h-9 w-9 items-center justify-center rounded-md border border-hairline bg-white text-body transition-colors hover:text-ink"
+    >
+      {icon === "bell" ? (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      ) : (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />
+        </svg>
+      )}
+      {dot && (
+        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-bad ring-2 ring-white" />
+      )}
+    </button>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-body">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function NavIcon({ name }: { name: IconName }) {
+  const props = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none" as const,
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  switch (name) {
+    case "grid":
+      return (
+        <svg {...props}>
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+      );
+    case "pin":
+      return (
+        <svg {...props}>
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      );
+    case "calendar":
+      return (
+        <svg {...props}>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      );
+    case "doc":
+      return (
+        <svg {...props}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+        </svg>
+      );
+    case "folder":
+      return (
+        <svg {...props}>
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+      );
+    case "bank":
+      return (
+        <svg {...props}>
+          <line x1="3" y1="21" x2="21" y2="21" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <polyline points="5 6 12 3 19 6" />
+          <line x1="4" y1="10" x2="4" y2="21" />
+          <line x1="20" y1="10" x2="20" y2="21" />
+          <line x1="8" y1="14" x2="8" y2="18" />
+          <line x1="12" y1="14" x2="12" y2="18" />
+          <line x1="16" y1="14" x2="16" y2="18" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...props}>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      );
+    case "plug":
+      return (
+        <svg {...props}>
+          <path d="M12 22v-5" />
+          <path d="M9 8V2" />
+          <path d="M15 8V2" />
+          <path d="M18 8v4a6 6 0 0 1-12 0V8z" />
+        </svg>
+      );
+    case "card":
+      return (
+        <svg {...props}>
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <line x1="2" y1="10" x2="22" y2="10" />
+        </svg>
+      );
+    case "gear":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.22.65.22 1H21a2 2 0 0 1 0 4h-.09c-.35 0-.69.08-1 .22z" />
+        </svg>
+      );
+  }
+}
