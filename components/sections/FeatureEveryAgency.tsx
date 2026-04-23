@@ -46,6 +46,14 @@ export function FeatureEveryAgency() {
               ))}
             </ul>
           </Reveal>
+          <Reveal delay={0.24}>
+            <a
+              href="/map"
+              className="mt-8 inline-flex items-center gap-1.5 font-mono text-[12px] uppercase tracking-wider text-ink underline-offset-4 transition-colors hover:text-accent-deep hover:underline"
+            >
+              View full coverage map →
+            </a>
+          </Reveal>
         </div>
       </div>
     </Section>

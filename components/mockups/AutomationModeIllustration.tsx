@@ -86,16 +86,17 @@ function AutoVisual() {
         <div className="h-2 w-2/3 rounded-sm bg-ink/15" />
         <div className="h-2 w-1/2 rounded-sm bg-ink/15" />
         <motion.div
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: "auto", opacity: 1 }}
+          initial={{ clipPath: "inset(0 100% 0 0)", opacity: 0 }}
+          animate={{ clipPath: "inset(0 0% 0 0)", opacity: 1 }}
           transition={{
-            duration: 0.4,
+            duration: 0.45,
             delay: 0.6,
+            ease: "easeOut",
             repeat: Infinity,
             repeatType: "reverse",
             repeatDelay: 1.4,
           }}
-          className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white"
+          className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white"
         >
           <svg
             width="10"

@@ -43,7 +43,7 @@ export function Hero() {
           delay={0.15}
           className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
         >
-          <Button variant="primary" size="md" href="#cta">
+          <Button variant="primary" size="md" href="/book">
             Book a free intro call
           </Button>
           <Button variant="ghost" size="md" href="#product">

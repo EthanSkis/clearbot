@@ -115,7 +115,7 @@ export function Pricing() {
                   <Button
                     variant={t.featured ? "primary" : "secondary"}
                     size="md"
-                    href="#cta"
+                    href="/book"
                     className="w-full"
                   >
                     {t.cta}
@@ -139,7 +139,7 @@ export function Pricing() {
             </div>
           </div>
           <a
-            href="#cta"
+            href="/book"
             className="font-mono text-[13px] uppercase tracking-wider text-ink underline-offset-4 hover:text-accent-deep hover:underline"
           >
             Contact us →

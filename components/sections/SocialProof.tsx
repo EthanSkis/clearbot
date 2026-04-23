@@ -4,7 +4,7 @@ import { QUOTES } from "@/lib/data";
 
 export function SocialProof() {
   return (
-    <Section>
+    <Section id="customers">
       <Reveal className="mx-auto max-w-[680px] text-center">
         <div className="font-mono text-[11px] uppercase tracking-wider text-accent-deep">
           Customers

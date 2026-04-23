@@ -39,7 +39,7 @@ export function FinalCTA() {
         </Reveal>
 
         <Reveal delay={0.18} className="mt-12 flex flex-col items-center gap-3">
-          <Button variant="primary" size="md" href="#book">
+          <Button variant="primary" size="md" href="/book">
             Book a free intro call
           </Button>
           <p className="font-mono text-[11px] uppercase tracking-wider text-body">

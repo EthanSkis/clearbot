@@ -1,8 +1,8 @@
 export const NAV_LINKS = [
-  { label: "Product", href: "#product" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Coverage", href: "#coverage" },
-  { label: "Data", href: "#data" },
+  { label: "Product", href: "/product" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Coverage", href: "/map" },
+  { label: "Data", href: "/data" },
 ];
 
 export type LicenseStatus = "current" | "due" | "overdue";
@@ -257,4 +257,144 @@ export const FINAL_CTA_BULLETS = [
   "A live audit of your current license inventory.",
   "A risk map of your top three exposed locations.",
   "A 30-second demo of what handoff to ClearBot looks like.",
+];
+
+export const INTEGRATIONS = [
+  { name: "Toast", category: "POS" },
+  { name: "Square", category: "POS" },
+  { name: "NetSuite", category: "ERP" },
+  { name: "QuickBooks", category: "Accounting" },
+  { name: "Sage Intacct", category: "Accounting" },
+  { name: "Workday", category: "HRIS" },
+  { name: "Rippling", category: "HRIS" },
+  { name: "Okta", category: "Identity" },
+  { name: "Google Workspace", category: "Identity" },
+  { name: "Slack", category: "Notifications" },
+  { name: "Microsoft Teams", category: "Notifications" },
+  { name: "Zapier", category: "Other" },
+];
+
+export const SECURITY_POINTS = [
+  {
+    title: "SOC 2 Type II",
+    body: "Audited annually. Report available on request under NDA.",
+  },
+  {
+    title: "AES-256 at rest, TLS 1.3 in transit",
+    body: "Document storage isolated per-tenant in encrypted buckets.",
+  },
+  {
+    title: "Full audit trail",
+    body: "Every form change, every submission, every access logged and immutable.",
+  },
+  {
+    title: "Role-based access",
+    body: "Operators, managers, finance, legal — see only what they need.",
+  },
+  {
+    title: "BAA available",
+    body: "For customers in healthcare and other regulated verticals.",
+  },
+  {
+    title: "SSO + SCIM",
+    body: "Okta, Google, and any SAML 2.0 IdP supported on Standard and above.",
+  },
+];
+
+export const FAQS = [
+  {
+    q: "How long does onboarding take?",
+    a: "For most operators with under 100 locations, we go from contract signed to fully active in under two weeks. We do the data extraction work; you confirm. Larger and more fragmented operators take three to four weeks.",
+  },
+  {
+    q: "What happens if I cancel?",
+    a: "You keep the data. We export every license record, every renewal history, and every document filed during your subscription, in CSV and PDF, and hand it back. No lock-in, no egress fees.",
+  },
+  {
+    q: "Do you charge per filing?",
+    a: "No. Pricing is per-location, per-year, flat. Filings, fees, agency communications, audit-trail storage — all included.",
+  },
+  {
+    q: "What if a renewal is missed?",
+    a: "On Standard and Professional, ClearBot reimburses the late-filing penalty, capped at the annual fee per location. Read the SLA in the MSA — it is in plain English.",
+  },
+  {
+    q: "Which states are covered?",
+    a: "38 active today. We expand based on operator demand — see the full coverage map for the current list and roadmap.",
+  },
+  {
+    q: "Can ClearBot file federal licenses too?",
+    a: "Yes. TTB, DEA, FDA, FAA, FCC — wherever the form is online, we can file it. Federal renewals are part of every plan.",
+  },
+];
+
+export const DATA_SCHEMA = [
+  { col: "license_id", type: "uuid", note: "Stable across renewals" },
+  { col: "jurisdiction", type: "text", note: "Federal · state · county · city" },
+  { col: "agency_code", type: "text", note: "ISO-style normalized code" },
+  { col: "license_type", type: "text", note: "Canonical taxonomy, 1,200+ types" },
+  { col: "issued_at", type: "date", note: "First-issue date" },
+  { col: "expires_at", type: "date", note: "Next renewal deadline" },
+  { col: "status", type: "enum", note: "active · pending · revoked · lapsed" },
+  { col: "fee_usd", type: "numeric", note: "Live, per-jurisdiction fee schedule" },
+  { col: "holder_business", type: "text", note: "Normalized legal entity name" },
+  { col: "holder_dba", type: "text", note: "Trade name, when distinct" },
+  { col: "modified_at", type: "timestamp", note: "Last change observed" },
+  { col: "source_url", type: "text", note: "Original agency record" },
+];
+
+export const DATA_USE_CASES = [
+  {
+    title: "Pre-acquisition diligence",
+    body: "Get a license-by-license risk profile of any target before close. Identify lapsed permits, pending revocations, and jurisdictional surprises.",
+  },
+  {
+    title: "Underwriting & insurance",
+    body: "Live compliance feeds for risk-rated locations. Triggered alerts when a holder's status changes.",
+  },
+  {
+    title: "Market entry studies",
+    body: "Forecast renewal load and agency lead times before signing leases in a new state.",
+  },
+  {
+    title: "Competitor monitoring",
+    body: "Track when competitors apply for new locations, expand into new jurisdictions, or let permits lapse.",
+  },
+];
+
+export const DATA_DELIVERY = [
+  {
+    name: "Quarterly snapshots",
+    body: "Full dataset as CSV or Parquet, delivered to S3 or GCS bucket of your choice.",
+  },
+  {
+    name: "Live API",
+    body: "REST + GraphQL access to the same data ClearBot operations runs on. Cursor-paginated, OAuth-protected.",
+  },
+  {
+    name: "Streaming webhooks",
+    body: "Subscribe to license-state changes by jurisdiction, agency, or holder.",
+  },
+  {
+    name: "Hosted Postgres replica",
+    body: "Read-only mirror of the canonical dataset, refreshed every 15 minutes.",
+  },
+];
+
+export const PRODUCT_PILLARS = [
+  {
+    eyebrow: "The dashboard",
+    title: "One screen for every location.",
+    body: "Every license, every renewal, every agency interaction — in a single, sortable, filterable view. Owners and operators see only what they need to act on.",
+  },
+  {
+    eyebrow: "The agency engine",
+    title: "528 portals, watched continuously.",
+    body: "ClearBot agents poll federal, state, county, and municipal agency portals every 90 seconds. Form changes, fee changes, deadline changes — caught before they affect a single one of your filings.",
+  },
+  {
+    eyebrow: "The filing system",
+    title: "Pre-filled, fee-calculated, submitted on time.",
+    body: "When a deadline approaches, ClearBot prepares the renewal packet, calculates and routes the fee, and either hands it to you for review or files it directly — your choice, per license.",
+  },
 ];

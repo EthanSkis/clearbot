@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import clsx from "clsx";
-import { LiveDot } from "@/components/ui/LiveDot";
+import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { NAV_LINKS } from "@/lib/data";
 
@@ -34,12 +35,12 @@ export function Nav() {
       )}
     >
       <div className="mx-auto flex h-16 w-full max-w-content items-center justify-between gap-6 px-6">
-        <a href="#top" className="flex items-center gap-2.5">
-          <LiveDot size={8} />
+        <Link href="/" className="flex items-center gap-2">
+          <Logo size={22} />
           <span className="font-sans text-[15px] font-semibold tracking-tight text-ink">
             ClearBot
           </span>
-        </a>
+        </Link>
 
         <nav className="hidden items-center gap-7 md:flex">
           {NAV_LINKS.map((l) => (
@@ -54,10 +55,10 @@ export function Nav() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm" href="#login">
+          <Button variant="ghost" size="sm" href="/login">
             Log in
           </Button>
-          <Button variant="primary" size="sm" href="#cta">
+          <Button variant="primary" size="sm" href="/book">
             Book intro call
           </Button>
         </div>
@@ -110,10 +111,10 @@ export function Nav() {
             </a>
           ))}
           <div className="mt-6 flex flex-col gap-3">
-            <Button variant="secondary" size="md" href="#login">
+            <Button variant="secondary" size="md" href="/login">
               Log in
             </Button>
-            <Button variant="primary" size="md" href="#cta">
+            <Button variant="primary" size="md" href="/book">
               Book intro call
             </Button>
           </div>
