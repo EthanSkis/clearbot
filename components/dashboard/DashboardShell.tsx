@@ -44,9 +44,41 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export function DashboardShell({ children }: { children: ReactNode }) {
+export type DashboardUser = {
+  email: string;
+  fullName?: string | null;
+  role?: string | null;
+};
+
+function initialsFor(user: DashboardUser) {
+  const source = (user.fullName || user.email || "").trim();
+  if (!source) return "??";
+  if (user.fullName) {
+    const parts = user.fullName.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
+
+export function DashboardShell({
+  children,
+  user,
+}: {
+  children: ReactNode;
+  user?: DashboardUser;
+}) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname() || "/dashboard";
+
+  const displayUser: DashboardUser = user ?? {
+    email: "diana@meridiangroup.com",
+    fullName: "Diana Reyes",
+    role: "Director of Ops",
+  };
+  const displayName = displayUser.fullName ?? displayUser.email;
+  const displayRole = displayUser.role ?? displayUser.email;
+  const initials = initialsFor(displayUser);
 
   return (
     <div className="flex min-h-screen bg-bgalt">
@@ -136,27 +168,29 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <div className="border-t border-hairline p-3">
           <div className="flex items-center gap-2.5 rounded-md bg-bgalt px-2.5 py-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-[12px] font-semibold text-white">
-              DR
+              {initials}
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium text-ink">
-                Diana Reyes
+                {displayName}
               </div>
               <div className="truncate font-mono text-[10px] text-body">
-                Director of Ops
+                {displayRole}
               </div>
             </div>
-            <Link
-              href="/"
-              className="rounded p-1 text-body hover:bg-white hover:text-ink"
-              aria-label="Sign out"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </Link>
+            <form action="/auth/signout" method="post">
+              <button
+                type="submit"
+                className="rounded p-1 text-body hover:bg-white hover:text-ink"
+                aria-label="Sign out"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </form>
           </div>
         </div>
       </aside>

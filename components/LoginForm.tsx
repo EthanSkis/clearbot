@@ -1,32 +1,76 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
+import { createClient } from "@/lib/supabase/client";
 
-type Status = "idle" | "loading" | "error";
+type Status = "idle" | "loading" | "error" | "magic_sent";
+type Mode = "password" | "magic";
 
 export function LoginForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/dashboard";
+
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!email || !password) {
+
+    if (!email.trim()) {
       setStatus("error");
-      setErrorMsg("Enter your email and password to continue.");
+      setErrorMsg("Enter your email to continue.");
       return;
     }
+    if (mode === "password" && !password) {
+      setStatus("error");
+      setErrorMsg("Enter your password to continue.");
+      return;
+    }
+
     setStatus("loading");
     setErrorMsg(null);
-    window.setTimeout(() => {
+
+    const supabase = createClient();
+
+    if (mode === "password") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) {
+        setStatus("error");
+        const isBadCreds = /invalid login credentials/i.test(error.message);
+        setErrorMsg(
+          isBadCreds
+            ? "We don't recognize that account. Contact ethan@clearbot.io for access."
+            : error.message
+        );
+        return;
+      }
+      router.push(next);
+      router.refresh();
+      return;
+    }
+
+    // magic link
+    const emailRedirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo, shouldCreateUser: false },
+    });
+    if (error) {
       setStatus("error");
-      setErrorMsg(
-        "We don't recognize that account. Contact ethan@clearbot.io for access."
-      );
-    }, 900);
+      setErrorMsg(error.message);
+      return;
+    }
+    setStatus("magic_sent");
   }
 
   return (
@@ -45,39 +89,74 @@ export function LoginForm() {
         />
       </Field>
 
-      <Field
-        label="Password"
-        htmlFor="password"
-        right={
-          <a
-            href="#"
-            className="font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
-          >
-            Forgot
-          </a>
-        }
-      >
-        <div className="relative">
-          <input
-            id="password"
-            name="password"
-            type={showPw ? "text" : "password"}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            className="h-11 w-full rounded-md border border-hairline bg-white px-3 pr-16 text-[14px] text-ink outline-none transition-colors placeholder:text-body/60 focus:border-accent"
-          />
+      {mode === "password" && (
+        <Field
+          label="Password"
+          htmlFor="password"
+          right={
+            <button
+              type="button"
+              onClick={() => {
+                setMode("magic");
+                setErrorMsg(null);
+                setStatus("idle");
+              }}
+              className="font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              Use magic link
+            </button>
+          }
+        >
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-11 w-full rounded-md border border-hairline bg-white px-3 pr-16 text-[14px] text-ink outline-none transition-colors placeholder:text-body/60 focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              className="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              {showPw ? "Hide" : "Show"}
+            </button>
+          </div>
+        </Field>
+      )}
+
+      {mode === "magic" && status !== "magic_sent" && (
+        <div className="flex items-center justify-between text-[12px]">
+          <p className="text-body">
+            We&apos;ll email you a one-tap sign-in link.
+          </p>
           <button
             type="button"
-            onClick={() => setShowPw((v) => !v)}
-            className="absolute inset-y-0 right-2 my-auto h-7 rounded px-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            onClick={() => {
+              setMode("password");
+              setErrorMsg(null);
+              setStatus("idle");
+            }}
+            className="font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
           >
-            {showPw ? "Hide" : "Show"}
+            Use password
           </button>
         </div>
-      </Field>
+      )}
+
+      {status === "magic_sent" && (
+        <div
+          role="status"
+          className="rounded-md border border-ok/30 bg-ok/5 px-3 py-2.5 text-[13px] text-ok"
+        >
+          Check <span className="font-medium">{email}</span> for a sign-in link.
+        </div>
+      )}
 
       {errorMsg && (
         <div
@@ -90,10 +169,10 @@ export function LoginForm() {
 
       <button
         type="submit"
-        disabled={status === "loading"}
+        disabled={status === "loading" || status === "magic_sent"}
         className={clsx(
           "inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-accent bg-accent font-sans text-[14px] font-medium text-white transition-colors",
-          status === "loading"
+          status === "loading" || status === "magic_sent"
             ? "cursor-not-allowed opacity-70"
             : "hover:border-accent-deep hover:bg-accent-deep"
         )}
@@ -101,10 +180,14 @@ export function LoginForm() {
         {status === "loading" ? (
           <>
             <Spinner />
-            Signing in…
+            {mode === "password" ? "Signing in…" : "Sending link…"}
           </>
-        ) : (
+        ) : mode === "password" ? (
           "Log in"
+        ) : status === "magic_sent" ? (
+          "Link sent"
+        ) : (
+          "Send magic link"
         )}
       </button>
 
@@ -116,9 +199,12 @@ export function LoginForm() {
         <span className="h-px flex-1 bg-hairline" />
       </div>
 
+      {/* Google OAuth not yet configured in Supabase — wire up later. */}
       <button
         type="button"
-        className="inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-hairline bg-white font-sans text-[14px] font-medium text-ink transition-colors hover:bg-bgalt"
+        disabled
+        title="Coming soon"
+        className="inline-flex h-11 w-full cursor-not-allowed items-center justify-center gap-2.5 rounded-full border border-hairline bg-white font-sans text-[14px] font-medium text-ink/60 opacity-70"
       >
         <GoogleMark />
         Continue with Google SSO
