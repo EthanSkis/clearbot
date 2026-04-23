@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
+import { createClient } from "@/lib/supabase/client";
 
 type Step = "datetime" | "details" | "confirmed";
 
@@ -53,7 +54,7 @@ export function BookingFlow() {
     setError(null);
   }
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
 
@@ -65,12 +66,49 @@ export function BookingFlow() {
       setError("That email doesn't look right.");
       return;
     }
+    if (!date || !slot) {
+      setError("Pick a date and time first.");
+      setStep("datetime");
+      return;
+    }
 
     setSubmitting(true);
-    window.setTimeout(() => {
-      setSubmitting(false);
-      setStep("confirmed");
-    }, 900);
+
+    const [h, m] = slot.split(":").map(Number);
+    const scheduled = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      h,
+      m,
+      0,
+      0
+    );
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const { error: insertError } = await supabase.from("bookings").insert({
+      user_id: user?.id ?? null,
+      name: form.name.trim(),
+      email: form.email.trim(),
+      company: form.company.trim(),
+      locations: form.locations,
+      notes: form.notes.trim() || null,
+      scheduled_at: scheduled.toISOString(),
+      timezone: tz,
+    });
+
+    setSubmitting(false);
+
+    if (insertError) {
+      setError("We couldn't save your booking. Try again, or email ethan@clearbot.io.");
+      return;
+    }
+
+    setStep("confirmed");
   }
 
   return (

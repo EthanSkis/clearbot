@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Logo } from "@/components/ui/Logo";
@@ -42,7 +43,9 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-10 rounded-2xl border border-hairline bg-white p-7 shadow-card">
-            <LoginForm />
+            <Suspense fallback={<div className="h-[360px]" />}>
+              <LoginForm />
+            </Suspense>
           </div>
 
           <p className="mt-6 text-center font-mono text-[11px] uppercase tracking-wider text-body">
