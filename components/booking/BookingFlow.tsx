@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
-import { createClient } from "@/lib/supabase/client";
+import { submitBooking } from "@/app/book/actions";
 
 type Step = "datetime" | "details" | "confirmed";
 
@@ -85,26 +85,20 @@ export function BookingFlow() {
       0
     );
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const { error: insertError } = await supabase.from("bookings").insert({
-      user_id: user?.id ?? null,
-      name: form.name.trim(),
-      email: form.email.trim(),
-      company: form.company.trim(),
+    const result = await submitBooking({
+      name: form.name,
+      email: form.email,
+      company: form.company,
       locations: form.locations,
-      notes: form.notes.trim() || null,
-      scheduled_at: scheduled.toISOString(),
+      notes: form.notes,
+      scheduledAtIso: scheduled.toISOString(),
       timezone: tz,
     });
 
     setSubmitting(false);
 
-    if (insertError) {
-      setError("We couldn't save your booking. Try again, or email ethan@clearbot.io.");
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
 
