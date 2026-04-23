@@ -229,11 +229,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-3">
               <span>© {new Date().getFullYear()} ClearBot, Inc.</span>
               <span className="text-hairline">·</span>
-              <a href="#" className="hover:text-ink">Status</a>
+              <Link href="/status" className="hover:text-ink">Status</Link>
               <span className="text-hairline">·</span>
-              <a href="#" className="hover:text-ink">Changelog</a>
+              <Link href="/changelog" className="hover:text-ink">Changelog</Link>
               <span className="text-hairline">·</span>
-              <a href="#" className="hover:text-ink">Docs</a>
+              <Link href="/docs" className="hover:text-ink">Docs</Link>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2 py-0.5 text-accent-deep">

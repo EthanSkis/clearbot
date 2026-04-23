@@ -11,8 +11,7 @@ export function Hero() {
       <div className="mx-auto w-full max-w-content px-6">
         {/* eyebrow */}
         <Reveal className="flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-accent-deep">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+          <span className="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-accent-deep">
             Now managing renewals in 38 states
           </span>
         </Reveal>

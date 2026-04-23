@@ -41,8 +41,7 @@ export default function PricingPage() {
         <section className="pt-[140px] md:pt-[180px]">
           <div className="mx-auto w-full max-w-content px-6">
             <Reveal className="mx-auto max-w-[820px] text-center">
-              <span className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-accent-deep">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+              <span className="inline-flex items-center rounded-full bg-accent-soft px-3 py-1 font-mono text-[11px] uppercase tracking-wider text-accent-deep">
                 Pricing
               </span>
               <h1 className="mt-7 font-display text-[clamp(44px,5.6vw,76px)] font-light leading-[1.04] tracking-[-0.015em] text-ink">
