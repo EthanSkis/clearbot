@@ -560,13 +560,32 @@ function CheckMark() {
   );
 }
 
-type ViewerKind = "pdf" | "image" | "text" | "other";
+type ViewerKind = "pdf" | "image" | "text" | "audio" | "video" | "office" | "html" | "other";
+
+const IMAGE_EXT = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "ico"];
+const TEXT_EXT = [
+  "txt", "csv", "tsv", "json", "md", "markdown", "log", "xml", "yml", "yaml",
+  "ini", "toml", "env", "conf", "rtf", "tex", "eml", "ics",
+  // code
+  "js", "mjs", "cjs", "jsx", "ts", "tsx", "py", "rb", "go", "rs",
+  "java", "kt", "swift", "c", "h", "cc", "cpp", "hpp", "cs",
+  "css", "scss", "sass", "less", "html", "htm", "vue", "svelte",
+  "sh", "bash", "zsh", "ps1", "bat", "cmd", "sql", "graphql", "gql",
+  "php", "lua", "pl", "r", "scala", "dart", "diff", "patch",
+];
+const AUDIO_EXT = ["mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "weba"];
+const VIDEO_EXT = ["mp4", "webm", "ogv", "mov", "m4v"];
+const OFFICE_EXT = ["doc", "docx", "xls", "xlsx", "xlsm", "ppt", "pptx", "odt", "ods", "odp"];
 
 function viewerKindFor(name: string): ViewerKind {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "pdf") return "pdf";
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"].includes(ext)) return "image";
-  if (["txt", "csv", "json", "md", "log", "xml", "yml", "yaml"].includes(ext)) return "text";
+  if (IMAGE_EXT.includes(ext)) return "image";
+  if (AUDIO_EXT.includes(ext)) return "audio";
+  if (VIDEO_EXT.includes(ext)) return "video";
+  if (OFFICE_EXT.includes(ext)) return "office";
+  if (ext === "html" || ext === "htm") return "html";
+  if (TEXT_EXT.includes(ext)) return "text";
   return "other";
 }
 
@@ -678,6 +697,36 @@ function DocumentViewer({
           {state.status === "ready" && kind === "text" && (
             <iframe
               src={state.url}
+              title={doc.name}
+              className="h-[78vh] w-full border-0 bg-white"
+            />
+          )}
+          {state.status === "ready" && kind === "html" && (
+            <iframe
+              src={state.url}
+              title={doc.name}
+              sandbox="allow-same-origin"
+              className="h-[78vh] w-full border-0 bg-white"
+            />
+          )}
+          {state.status === "ready" && kind === "audio" && (
+            <div className="flex w-full flex-col items-center gap-4 px-6 py-12">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <audio controls src={state.url} className="w-full max-w-[480px]" />
+              <p className="font-mono text-[11px] text-body">{doc.name}</p>
+            </div>
+          )}
+          {state.status === "ready" && kind === "video" && (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              controls
+              src={state.url}
+              className="max-h-[78vh] w-full bg-ink object-contain"
+            />
+          )}
+          {state.status === "ready" && kind === "office" && (
+            <iframe
+              src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(state.url)}`}
               title={doc.name}
               className="h-[78vh] w-full border-0 bg-white"
             />
