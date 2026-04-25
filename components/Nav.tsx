@@ -6,10 +6,12 @@ import clsx from "clsx";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { NAV_LINKS } from "@/lib/data";
+import { createClient } from "@/lib/supabase/client";
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -24,6 +26,21 @@ export function Nav() {
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setAuthed(Boolean(data.session));
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthed(Boolean(session));
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <header
@@ -55,12 +72,20 @@ export function Nav() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm" href="/login">
-            Log in
-          </Button>
-          <Button variant="primary" size="sm" href="/signup">
-            Get started
-          </Button>
+          {authed ? (
+            <Button variant="primary" size="sm" href="/dashboard">
+              Dashboard
+            </Button>
+          ) : authed === false ? (
+            <>
+              <Button variant="ghost" size="sm" href="/login">
+                Log in
+              </Button>
+              <Button variant="primary" size="sm" href="/signup">
+                Get started
+              </Button>
+            </>
+          ) : null}
         </div>
 
         <button
@@ -111,12 +136,20 @@ export function Nav() {
             </a>
           ))}
           <div className="mt-6 flex flex-col gap-3">
-            <Button variant="secondary" size="md" href="/login">
-              Log in
-            </Button>
-            <Button variant="primary" size="md" href="/signup">
-              Get started
-            </Button>
+            {authed ? (
+              <Button variant="primary" size="md" href="/dashboard">
+                Dashboard
+              </Button>
+            ) : authed === false ? (
+              <>
+                <Button variant="secondary" size="md" href="/login">
+                  Log in
+                </Button>
+                <Button variant="primary" size="md" href="/signup">
+                  Get started
+                </Button>
+              </>
+            ) : null}
           </div>
         </nav>
       </div>
