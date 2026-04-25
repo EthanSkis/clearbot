@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 const QUERY_LINES = [
   "SELECT jurisdiction, COUNT(*) AS lapses",
@@ -24,19 +25,21 @@ const RESULTS = [
 
 export function QueryConsole() {
   const [step, setStep] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
+  useVisibleInterval(
+    () => {
       setStep((s) => (s + 1) % (QUERY_LINES.length + RESULTS.length + 4));
-    }, 600);
-    return () => window.clearInterval(id);
-  }, []);
+    },
+    600,
+    containerRef
+  );
 
   const queryShown = Math.min(step, QUERY_LINES.length);
   const resultsShown = Math.max(0, step - QUERY_LINES.length - 1);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
+    <div ref={containerRef} className="overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
       <div className="flex items-center justify-between border-b border-hairline bg-bgalt/60 px-5 py-3">
         <span className="font-mono text-[11px] uppercase tracking-wider text-body">
           query · production replica
