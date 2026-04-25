@@ -35,8 +35,8 @@ export function Reveal({ children, delay = 0, className, as = "div" }: Props) {
     <Tag
       ref={ref as React.RefObject<never>}
       className={clsx(
-        "transition-opacity duration-500 ease-out motion-reduce:transition-none",
-        shown ? "opacity-100" : "opacity-0",
+        "transform-gpu transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none motion-reduce:transform-none",
+        shown ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0",
         className
       )}
       style={{ transitionDelay: `${delay}s` }}
