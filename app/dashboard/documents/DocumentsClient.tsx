@@ -39,12 +39,21 @@ export function DocumentsClient({
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | DocumentRow["kind"]>("all");
   const [uploading, setUploading] = useState(false);
+  const [uploads, setUploads] = useState<UploadEntry[]>([]);
   const [viewer, setViewer] = useState<
     | { doc: DocumentRow; status: "loading" }
     | { doc: DocumentRow; status: "ready"; url: string }
     | { doc: DocumentRow; status: "error"; error: string }
     | null
   >(null);
+
+  function patchUpload(id: string, patch: Partial<UploadEntry>) {
+    setUploads((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  }
+
+  function dismissUpload(id: string) {
+    setUploads((prev) => prev.filter((u) => u.id !== id));
+  }
 
   const totalBytes = rows.reduce((s, r) => s + r.size_bytes, 0);
   const usedGb = totalBytes / 1024 / 1024 / 1024;
@@ -76,19 +85,48 @@ export function DocumentsClient({
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const apiKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const supabase = createClient();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token ?? apiKey;
+
+    const queue = Array.from(files).map((file) => {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const path = `${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const id = `${path}`;
+      return { id, file, path };
+    });
+
+    setUploads((prev) => [
+      ...prev,
+      ...queue.map(({ id, file }) => ({
+        id,
+        name: file.name,
+        size: file.size,
+        pct: 0,
+        status: "uploading" as const,
+      })),
+    ]);
+
+    let registeredAny = false;
+
     try {
-      const supabase = createClient();
-      for (const file of Array.from(files)) {
-        const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      for (const { id, file, path } of queue) {
         const cleanName = file.name.slice(0, 200);
-        const path = `${workspaceId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("documents")
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (uploadError) {
-          alert(`Upload failed: ${uploadError.message}`);
+        const uploadResult = await uploadFileWithProgress({
+          supabaseUrl,
+          apiKey,
+          accessToken,
+          path,
+          file,
+          onProgress: (pct) => patchUpload(id, { pct }),
+        });
+        if (!uploadResult.ok) {
+          patchUpload(id, { status: "error", error: uploadResult.error });
           continue;
         }
+        patchUpload(id, { pct: 100, status: "registering" });
         const kind = inferKind(cleanName);
         const r = await registerDocument({
           storagePath: path,
@@ -97,12 +135,19 @@ export function DocumentsClient({
           mimeType: file.type || "application/octet-stream",
           sizeBytes: file.size,
         });
-        if (!r.ok) alert(r.error);
+        if (!r.ok) {
+          patchUpload(id, { status: "error", error: r.error });
+          continue;
+        }
+        registeredAny = true;
+        patchUpload(id, { status: "done" });
+        const finishedId = id;
+        setTimeout(() => dismissUpload(finishedId), 2500);
       }
-      refresh();
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
+      if (registeredAny) refresh();
     }
   }
 
@@ -327,7 +372,191 @@ export function DocumentsClient({
       </section>
 
       {viewer && <DocumentViewer state={viewer} onClose={() => setViewer(null)} />}
+      <UploadProgressPanel
+        uploads={uploads}
+        onDismiss={dismissUpload}
+      />
     </>
+  );
+}
+
+type UploadEntry = {
+  id: string;
+  name: string;
+  size: number;
+  pct: number;
+  status: "uploading" | "registering" | "done" | "error";
+  error?: string;
+};
+
+function uploadFileWithProgress({
+  supabaseUrl,
+  apiKey,
+  accessToken,
+  path,
+  file,
+  onProgress,
+}: {
+  supabaseUrl: string;
+  apiKey: string;
+  accessToken: string;
+  path: string;
+  file: File;
+  onProgress: (pct: number) => void;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  return new Promise((resolve) => {
+    const url = `${supabaseUrl}/storage/v1/object/documents/${path
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")}`;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+    xhr.setRequestHeader("apikey", apiKey);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        onProgress(Math.min(99, (e.loaded / e.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        resolve({ ok: true });
+        return;
+      }
+      let message = `Upload failed (${xhr.status})`;
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (body && typeof body.message === "string") message = body.message;
+      } catch {
+        /* ignore */
+      }
+      resolve({ ok: false, error: message });
+    };
+    xhr.onerror = () => resolve({ ok: false, error: "Network error during upload." });
+    xhr.onabort = () => resolve({ ok: false, error: "Upload aborted." });
+    xhr.send(file);
+  });
+}
+
+function UploadProgressPanel({
+  uploads,
+  onDismiss,
+}: {
+  uploads: UploadEntry[];
+  onDismiss: (id: string) => void;
+}) {
+  if (uploads.length === 0) return null;
+  const active = uploads.filter((u) => u.status === "uploading" || u.status === "registering").length;
+  return (
+    <div className="fixed bottom-4 right-4 z-40 w-[360px] overflow-hidden rounded-2xl border border-hairline bg-white shadow-2xl">
+      <div className="flex items-center justify-between border-b border-hairline px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          {active > 0 ? <Spinner /> : <CheckMark />}
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">Uploads</div>
+            <div className="font-display text-[14px] font-light text-ink">
+              {active > 0
+                ? `${active} of ${uploads.length} in progress`
+                : `${uploads.length} complete`}
+            </div>
+          </div>
+        </div>
+        {active === 0 && (
+          <button
+            type="button"
+            onClick={() => uploads.forEach((u) => onDismiss(u.id))}
+            className="rounded p-1 text-body hover:bg-bgalt hover:text-ink"
+            aria-label="Dismiss all"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <ul className="max-h-[280px] divide-y divide-hairline overflow-y-auto">
+        {uploads.map((u) => (
+          <li key={u.id} className="px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-medium text-ink">{u.name}</div>
+                <div className="font-mono text-[10px] text-body">
+                  {formatBytes(u.size)} ·{" "}
+                  {u.status === "uploading"
+                    ? `${Math.floor(u.pct)}%`
+                    : u.status === "registering"
+                      ? "Finalizing…"
+                      : u.status === "done"
+                        ? "Done"
+                        : "Error"}
+                </div>
+              </div>
+              {u.status === "error" && (
+                <button
+                  type="button"
+                  onClick={() => onDismiss(u.id)}
+                  aria-label="Dismiss"
+                  className="rounded p-1 text-body hover:bg-bgalt hover:text-ink"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+              {u.status === "done" && <CheckMark />}
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-bgalt">
+              <div
+                className={clsx(
+                  "h-full transition-[width] duration-200 ease-out",
+                  u.status === "error"
+                    ? "bg-bad"
+                    : u.status === "done"
+                      ? "bg-ok"
+                      : u.status === "registering"
+                        ? "animate-pulse bg-accent"
+                        : "bg-accent"
+                )}
+                style={{
+                  width: `${
+                    u.status === "error" || u.status === "done" || u.status === "registering"
+                      ? 100
+                      : Math.max(2, u.pct)
+                  }%`,
+                }}
+              />
+            </div>
+            {u.status === "error" && u.error && (
+              <div className="mt-2 rounded-md border border-bad/30 bg-bad/5 px-2 py-1 text-[11px] text-bad">
+                {u.error}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin text-accent">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+      <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckMark() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-ok">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   );
 }
 
