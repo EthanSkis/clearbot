@@ -58,8 +58,8 @@ export function Nav() {
           <Button variant="ghost" size="sm" href="/login">
             Log in
           </Button>
-          <Button variant="primary" size="sm" href="/book">
-            Book intro call
+          <Button variant="primary" size="sm" href="/signup">
+            Get started
           </Button>
         </div>
 
@@ -114,8 +114,8 @@ export function Nav() {
             <Button variant="secondary" size="md" href="/login">
               Log in
             </Button>
-            <Button variant="primary" size="md" href="/book">
-              Book intro call
+            <Button variant="primary" size="md" href="/signup">
+              Get started
             </Button>
           </div>
         </nav>

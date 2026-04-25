@@ -23,13 +23,22 @@ type NavItem = {
   label: string;
   href: string;
   icon: IconName;
-  badge?: string;
+  badgeKey?: keyof BadgeCounts;
+};
+
+export type BadgeCounts = {
+  locations: number;
+  renewals: number;
+  filings: number;
+  documents: number;
+  team: number;
+  integrations: number;
 };
 
 const NAV: NavItem[] = [
   { label: "Overview", href: "/dashboard", icon: "grid" },
-  { label: "Locations", href: "/dashboard/locations", icon: "pin", badge: "38" },
-  { label: "Renewals", href: "/dashboard/renewals", icon: "calendar", badge: "14" },
+  { label: "Locations", href: "/dashboard/locations", icon: "pin", badgeKey: "locations" },
+  { label: "Renewals", href: "/dashboard/renewals", icon: "calendar", badgeKey: "renewals" },
   { label: "Filings", href: "/dashboard/filings", icon: "doc" },
   { label: "Documents", href: "/dashboard/documents", icon: "folder" },
   { label: "Agencies", href: "/dashboard/agencies", icon: "bank" },
@@ -50,6 +59,13 @@ export type DashboardUser = {
   role?: string | null;
 };
 
+export type DashboardWorkspace = {
+  id: string;
+  name: string;
+  plan: string;
+  role: string;
+};
+
 function initialsFor(user: DashboardUser) {
   const source = (user.fullName || user.email || "").trim();
   if (!source) return "??";
@@ -64,9 +80,15 @@ function initialsFor(user: DashboardUser) {
 export function DashboardShell({
   children,
   user,
+  workspace,
+  badges,
+  automationDefault,
 }: {
   children: ReactNode;
   user?: DashboardUser;
+  workspace?: DashboardWorkspace;
+  badges?: Partial<BadgeCounts>;
+  automationDefault?: "alert" | "prep" | "auto";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname() || "/dashboard";
@@ -76,6 +98,7 @@ export function DashboardShell({
     fullName: "Diana Reyes",
     role: "Director of Ops",
   };
+  const workspaceName = workspace?.name ?? "Your workspace";
   const displayName = displayUser.fullName ?? displayUser.email;
   const displayRole = displayUser.role ?? displayUser.email;
   const initials = initialsFor(displayUser);
@@ -107,7 +130,7 @@ export function DashboardShell({
                 Workspace
               </div>
               <div className="truncate text-[13px] font-medium text-ink">
-                Meridian Restaurant Group
+                {workspaceName}
               </div>
             </div>
             <Chevron />
@@ -118,6 +141,7 @@ export function DashboardShell({
           <ul className="space-y-0.5">
             {NAV.map((item) => {
               const active = isActive(pathname, item.href);
+              const badge = item.badgeKey ? badges?.[item.badgeKey] : undefined;
               return (
                 <li key={item.label}>
                   <Link
@@ -134,9 +158,9 @@ export function DashboardShell({
                       <NavIcon name={item.icon} />
                       {item.label}
                     </span>
-                    {item.badge && (
+                    {typeof badge === "number" && badge > 0 && (
                       <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[10px] text-body ring-1 ring-hairline">
-                        {item.badge}
+                        {badge}
                       </span>
                     )}
                   </Link>
@@ -151,15 +175,15 @@ export function DashboardShell({
             </div>
             <div className="mt-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-[13px] font-medium text-accent-deep">
-                  Auto
+                <span className="text-[13px] font-medium text-accent-deep capitalize">
+                  {automationDefault ?? "auto"}
                 </span>
                 <Pill tone="accent" withDot>
                   On
                 </Pill>
               </div>
               <p className="mt-1 text-[11px] leading-[1.4] text-body">
-                Filings submit automatically. Switch per-license any time.
+                Default for new licenses. Override per-license at any time.
               </p>
             </div>
           </div>
@@ -240,8 +264,8 @@ export function DashboardShell({
             <div className="ml-auto flex items-center gap-2">
               <TopBarButton label="What's new" icon="sparkle" />
               <TopBarButton label="Notifications" icon="bell" dot />
-              <a
-                href="#"
+              <Link
+                href="/dashboard/locations?new=1"
                 className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -249,7 +273,7 @@ export function DashboardShell({
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 New location
-              </a>
+              </Link>
             </div>
           </div>
 

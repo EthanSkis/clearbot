@@ -49,7 +49,7 @@ export function LoginForm() {
         const isBadCreds = /invalid login credentials/i.test(error.message);
         setErrorMsg(
           isBadCreds
-            ? "We don't recognize that account. Contact ethan@clearbot.io for access."
+            ? "Email or password is incorrect. Need an account? Visit /signup."
             : error.message
         );
         return;

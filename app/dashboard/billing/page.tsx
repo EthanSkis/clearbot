@@ -1,43 +1,105 @@
 import type { Metadata } from "next";
 import clsx from "clsx";
 import { PageHeader, SectionHeader } from "@/components/dashboard/PageHeader";
+import { canAdmin, requireContext } from "@/lib/workspace";
+import { createClient } from "@/lib/supabase/server";
 import { PRICING_TIERS } from "@/lib/data";
+import {
+  InvoicesTable,
+  PaymentMethods,
+  PlanSwitcher,
+  type Invoice,
+  type PaymentMethod,
+} from "./BillingClient";
 
 export const metadata: Metadata = { title: "Billing · ClearBot" };
+export const dynamic = "force-dynamic";
 
-const INVOICES = [
-  { id: "INV-2026-04", date: "Apr 01, 2026", period: "Apr 2026", amount: "$30,400", status: "Paid", method: "Wire · Chase ••4421" },
-  { id: "INV-2026-03", date: "Mar 01, 2026", period: "Mar 2026", amount: "$30,400", status: "Paid", method: "Wire · Chase ••4421" },
-  { id: "INV-2026-02", date: "Feb 01, 2026", period: "Feb 2026", amount: "$28,800", status: "Paid", method: "Wire · Chase ••4421" },
-  { id: "INV-2026-01", date: "Jan 01, 2026", period: "Jan 2026", amount: "$28,800", status: "Paid", method: "Wire · Chase ••4421" },
-  { id: "INV-2025-12", date: "Dec 01, 2025", period: "Dec 2025", amount: "$28,800", status: "Paid", method: "ACH · Chase ••4421" },
-];
+const PLAN_INCLUDED: Record<string, { locations: number; filings: number; storageGb: number }> = {
+  essential: { locations: 10, filings: 60, storageGb: 25 },
+  standard: { locations: 25, filings: 120, storageGb: 50 },
+  professional: { locations: 40, filings: 200, storageGb: 100 },
+};
 
-const USAGE = [
-  { label: "Locations included", value: 40, used: 38 },
-  { label: "Additional locations (overage)", value: 10, used: 0 },
-  { label: "Filings included /mo", value: 200, used: 42 },
-  { label: "Document storage", value: 100, used: 18 },
-  { label: "API events /mo", value: 1_000_000, used: 127_420 },
-];
+const PLAN_PRICE_PER_LOC: Record<string, number> = {
+  essential: 500,
+  standard: 800,
+  professional: 1200,
+};
 
-export default function BillingPage() {
+export default async function BillingPage() {
+  const ctx = await requireContext();
+  const supabase = createClient();
+  const canManage = canAdmin(ctx.membership.role) || ctx.membership.role === "finance";
+
+  const [
+    { count: locationCount },
+    { count: filingsThisMonth },
+    { data: documents },
+    { count: members },
+    { data: invoices },
+    { data: paymentMethods },
+  ] = await Promise.all([
+    supabase
+      .from("locations")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("status", "active"),
+    supabase
+      .from("filings")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspace.id)
+      .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+    supabase
+      .from("documents")
+      .select("size_bytes")
+      .eq("workspace_id", ctx.workspace.id),
+    supabase
+      .from("workspace_members")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("status", "active"),
+    supabase
+      .from("invoices")
+      .select("id, short_id, period_label, period_start, period_end, amount_cents, status, method, issued_at, paid_at")
+      .eq("workspace_id", ctx.workspace.id)
+      .order("issued_at", { ascending: false }),
+    supabase
+      .from("payment_methods")
+      .select("id, kind, label, last4, is_primary")
+      .eq("workspace_id", ctx.workspace.id)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const totalBytes = (documents ?? []).reduce((s, d) => s + (d.size_bytes as number), 0);
+  const usedGb = totalBytes / 1024 / 1024 / 1024;
+
+  const plan = ctx.workspace.plan;
+  const limits = PLAN_INCLUDED[plan] ?? PLAN_INCLUDED.essential;
+  const monthlyCents = (locationCount ?? 0) * (PLAN_PRICE_PER_LOC[plan] ?? 500) * 100;
+
+  const today = new Date();
+  const nextInvoiceDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+
+  const usage = [
+    { label: "Locations", used: locationCount ?? 0, limit: limits.locations },
+    { label: "Filings this month", used: filingsThisMonth ?? 0, limit: limits.filings },
+    { label: "Document storage (GB)", used: Number(usedGb.toFixed(2)), limit: limits.storageGb },
+    { label: "Seats", used: members ?? 0, limit: 999 },
+  ];
+
   return (
     <>
       <PageHeader
-        eyebrow="Professional · annual · seat-locked"
-        title={<>Your plan, <span className="italic">and the math behind it.</span></>}
-        subtitle="Every line item — seats, locations, filings, storage, fees routed. Transparent pricing, auditor-ready."
-        actions={
+        eyebrow={`${plan.charAt(0).toUpperCase() + plan.slice(1)} plan · billed monthly`}
+        title={
           <>
-            <button className="rounded-md border border-hairline bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink">
-              Download MSA
-            </button>
-            <button className="rounded-full border border-accent bg-accent px-4 py-2 font-sans text-[13px] font-medium text-white hover:bg-accent-deep">
-              Change plan
-            </button>
+            Your plan, <span className="italic">and the math behind it.</span>
           </>
         }
+        subtitle="Per-location pricing. Filings, fees, and storage included — no per-filing billing."
+        actions={<PlanSwitcher currentPlan={plan} canManage={canManage} />}
       />
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
@@ -45,73 +107,66 @@ export default function BillingPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="font-mono text-[10px] uppercase tracking-wider text-accent-deep">Current plan</div>
-              <div className="mt-2 font-display text-[32px] font-light leading-tight tracking-[-0.01em] text-ink">
-                Professional
+              <div className="mt-2 font-display text-[32px] font-light leading-tight tracking-[-0.01em] text-ink capitalize">
+                {plan}
               </div>
               <p className="mt-2 max-w-[460px] text-[13px] leading-[1.55] text-body">
-                Fully automated filing · dedicated compliance manager · 1-hour SLA · SSO + SCIM · priority response.
+                {plan === "essential" && "Tracking and alerts. We watch every deadline, you file."}
+                {plan === "standard" && "Tracking + pre-fill. Forms staged, fees calculated, you submit."}
+                {plan === "professional" && "Fully automated filing · dedicated CSM · SSO + SCIM · 1-hour SLA."}
               </p>
             </div>
             <div className="text-right">
               <div className="font-display text-[32px] font-light leading-tight text-ink tabular-nums">
-                $30,400
+                ${(monthlyCents / 100).toLocaleString()}
               </div>
-              <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-body">per month · billed annually</div>
+              <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-body">
+                per month at current usage
+              </div>
             </div>
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <MiniStat label="Locations" value="38 / 40" />
-            <MiniStat label="Filings / mo" value="42 / 200" />
-            <MiniStat label="Storage" value="18 / 100 GB" />
-            <MiniStat label="Seats" value="7 / unlimited" />
+            <MiniStat label="Locations" value={`${locationCount ?? 0} / ${limits.locations}`} />
+            <MiniStat label="Filings / mo" value={`${filingsThisMonth ?? 0} / ${limits.filings}`} />
+            <MiniStat label="Storage" value={`${usedGb.toFixed(1)} / ${limits.storageGb} GB`} />
+            <MiniStat label="Seats" value={`${members ?? 0}`} />
           </div>
 
           <div className="mt-6 border-t border-hairline pt-4">
             <div className="font-mono text-[10px] uppercase tracking-wider text-body">Next invoice</div>
             <div className="mt-1 flex items-center justify-between">
-              <span className="text-[14px] text-ink">May 01, 2026</span>
-              <span className="font-mono text-[13px] tabular-nums text-ink">$30,400</span>
+              <span className="text-[14px] text-ink">
+                {nextInvoiceDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+              <span className="font-mono text-[13px] tabular-nums text-ink">
+                ${(monthlyCents / 100).toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-hairline bg-white p-6 shadow-card">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-body">Payment method</div>
-          <div className="mt-3 rounded-md border border-hairline bg-bgalt px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[14px] font-medium text-ink">Chase Business ••4421</span>
-              <span className="font-mono text-[11px] uppercase tracking-wider text-body">Primary</span>
-            </div>
-            <div className="mt-1 font-mono text-[11px] text-body">Wire · US ACH · auto-pay on invoice</div>
-          </div>
-          <button className="mt-3 w-full rounded-md border border-hairline bg-white py-2 font-mono text-[11px] uppercase tracking-wider text-ink hover:bg-bgalt">
-            + Add payment method
-          </button>
-
-          <div className="mt-6 border-t border-hairline pt-4">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-body">Billing contact</div>
-            <div className="mt-2 text-[13px] text-ink">Marcus Holt · Finance</div>
-            <div className="font-mono text-[11px] text-body">marcus@meridiang.com</div>
-          </div>
-        </div>
+        <PaymentMethods rows={(paymentMethods ?? []) as unknown as PaymentMethod[]} canManage={canManage} />
       </section>
 
       <section>
         <SectionHeader title="Usage this month" subtitle="Measured continuously · updates at midnight UTC." />
         <div className="mt-4 overflow-hidden rounded-2xl border border-hairline bg-white shadow-card">
           <ul className="divide-y divide-hairline">
-            {USAGE.map((u) => {
-              const pct = Math.min(100, (u.used / u.value) * 100);
+            {usage.map((u) => {
+              const pct = Math.min(100, (u.used / u.limit) * 100);
               const tone = pct > 90 ? "bg-bad" : pct > 70 ? "bg-warn" : "bg-accent";
               return (
-                <li key={u.label} className="grid grid-cols-1 items-center gap-3 px-5 py-3.5 md:grid-cols-[1.6fr_3fr_0.8fr]">
+                <li
+                  key={u.label}
+                  className="grid grid-cols-1 items-center gap-3 px-5 py-3.5 md:grid-cols-[1.6fr_3fr_0.8fr]"
+                >
                   <div className="text-[13px] font-medium text-ink">{u.label}</div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-bgalt">
                     <div className={clsx("h-full", tone)} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="text-right font-mono text-[12px] tabular-nums text-ink">
-                    {formatUsed(u.used)} / {formatUsed(u.value)}
+                    {u.used} / {u.limit === 999 ? "unlimited" : u.limit}
                   </div>
                 </li>
               );
@@ -121,13 +176,10 @@ export default function BillingPage() {
       </section>
 
       <section>
-        <SectionHeader
-          title="Compare plans"
-          subtitle="Prices are per-location, per-month. Filings, fees, and storage are included — no per-filing billing."
-        />
+        <SectionHeader title="Compare plans" subtitle="Per-location, per-month. Filings & storage included." />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {PRICING_TIERS.map((p) => {
-            const isCurrent = p.tier === "Professional";
+            const isCurrent = p.tier.toLowerCase() === plan;
             return (
               <div
                 key={p.tier}
@@ -166,39 +218,9 @@ export default function BillingPage() {
       </section>
 
       <section>
-        <SectionHeader title="Invoices" subtitle="All past invoices, downloadable as PDF or CSV." />
-        <div className="mt-4 overflow-hidden rounded-2xl border border-hairline bg-white shadow-card">
-          <div className="hidden grid-cols-[0.8fr_1fr_0.9fr_0.8fr_0.6fr_1.2fr_0.5fr] items-center gap-4 border-b border-hairline bg-bgalt/60 px-5 py-2.5 font-mono text-[10px] uppercase tracking-wider text-body md:grid">
-            <div>Invoice</div>
-            <div>Date</div>
-            <div>Period</div>
-            <div className="text-right">Amount</div>
-            <div>Status</div>
-            <div>Method</div>
-            <div className="text-right"></div>
-          </div>
-          <ul className="divide-y divide-hairline">
-            {INVOICES.map((inv) => (
-              <li key={inv.id} className="grid grid-cols-[1fr_auto] items-center gap-3 px-5 py-3.5 md:grid-cols-[0.8fr_1fr_0.9fr_0.8fr_0.6fr_1.2fr_0.5fr]">
-                <div className="font-mono text-[12px] text-ink">{inv.id}</div>
-                <div className="hidden font-mono text-[12px] text-body md:block">{inv.date}</div>
-                <div className="hidden font-mono text-[12px] text-body md:block">{inv.period}</div>
-                <div className="hidden text-right font-mono text-[13px] tabular-nums text-ink md:block">{inv.amount}</div>
-                <div className="hidden md:block">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-ok/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ok">
-                    <span className="h-1.5 w-1.5 rounded-full bg-ok" />
-                    {inv.status}
-                  </span>
-                </div>
-                <div className="hidden truncate font-mono text-[11px] text-body md:block">{inv.method}</div>
-                <div className="flex items-center justify-end">
-                  <a href="#" className="font-mono text-[11px] uppercase tracking-wider text-accent-deep hover:text-accent">
-                    PDF →
-                  </a>
-                </div>
-              </li>
-            ))}
-          </ul>
+        <SectionHeader title="Invoices" subtitle="Generate, mark paid, and download as CSV." />
+        <div className="mt-4">
+          <InvoicesTable rows={(invoices ?? []) as unknown as Invoice[]} canManage={canManage} />
         </div>
       </section>
     </>
@@ -212,10 +234,4 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <div className="mt-1 font-mono text-[13px] tabular-nums text-ink">{value}</div>
     </div>
   );
-}
-
-function formatUsed(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return n.toString();
 }
