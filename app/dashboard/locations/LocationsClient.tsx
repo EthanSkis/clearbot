@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import clsx from "clsx";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Pill } from "@/components/ui/Pill";
+import { useDialog } from "@/components/ui/Dialog";
 import {
   createLocation,
   deleteLocation,
@@ -32,6 +33,7 @@ type Filter = "all" | "attention";
 export function LocationsClient({ rows }: { rows: LocationRow[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dialog = useDialog();
   const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [filter, setFilter] = useState<Filter>("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -153,10 +155,20 @@ export function LocationsClient({ rows }: { rows: LocationRow[] }) {
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!confirm(`Remove ${row.name}? This deletes all licenses and filings tied to it.`)) return;
+                        const ok = await dialog.confirm({
+                          title: `Remove ${row.name}?`,
+                          body: "This deletes every license and filing tied to this location. This can't be undone.",
+                          confirmLabel: "Delete",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
                         const r = await deleteLocation(row.id);
-                        if (!r.ok) alert(r.error);
-                        else refresh();
+                        if (!r.ok) {
+                          await dialog.alert({ title: "Could not delete location", body: r.error, tone: "danger" });
+                        } else {
+                          dialog.toast({ body: `Removed ${row.name}.`, tone: "success" });
+                          refresh();
+                        }
                       }}
                       className="rounded border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                     >
@@ -188,9 +200,12 @@ export function LocationsClient({ rows }: { rows: LocationRow[] }) {
           const parsed = parseCsv(text);
           const result = await importLocationsCsv(parsed);
           if (!result.ok) {
-            alert(result.error);
+            await dialog.alert({ title: "Import failed", body: result.error, tone: "danger" });
           } else {
-            alert(`Imported ${result.inserted} locations.`);
+            dialog.toast({
+              body: `Imported ${result.inserted} location${result.inserted === 1 ? "" : "s"}.`,
+              tone: "success",
+            });
             refresh();
           }
           e.target.value = "";

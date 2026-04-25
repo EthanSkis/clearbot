@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import { useDialog } from "@/components/ui/Dialog";
 import {
   cancelSubscription,
   deleteWorkspace,
@@ -402,6 +403,7 @@ function DangerSection({
   members: MemberOption[];
   onChanged: () => void;
 }) {
+  const dialog = useDialog();
   const [transferTarget, setTransferTarget] = useState(members[0]?.user_id ?? "");
   const [confirmName, setConfirmName] = useState("");
   return (
@@ -416,7 +418,7 @@ function DangerSection({
           onClick={async () => {
             const r = await exportWorkspace();
             if (!r.ok) {
-              alert(r.error);
+              await dialog.alert({ title: "Export failed", body: r.error, tone: "danger" });
               return;
             }
             const blob = new Blob([r.csv], { type: "text/csv;charset=utf-8" });
@@ -428,6 +430,7 @@ function DangerSection({
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            dialog.toast({ body: "Workspace export downloaded.", tone: "success" });
           }}
         />
         <div className="rounded-md border border-hairline bg-white p-4">
@@ -450,10 +453,22 @@ function DangerSection({
             <button
               onClick={async () => {
                 if (!transferTarget) return;
-                if (!confirm("Transfer ownership? You will be demoted to Admin.")) return;
+                const target = members.find((m) => m.user_id === transferTarget);
+                const targetLabel = target?.full_name ?? target?.email ?? "this member";
+                const ok = await dialog.confirm({
+                  title: "Transfer workspace ownership?",
+                  body: `${targetLabel} becomes the owner. You drop to Admin and lose owner-only powers (delete, transfer, ownership). This can't be undone from this page.`,
+                  confirmLabel: "Transfer",
+                  tone: "danger",
+                });
+                if (!ok) return;
                 const r = await transferOwnership(transferTarget);
-                if (!r.ok) alert(r.error);
-                else onChanged();
+                if (!r.ok) {
+                  await dialog.alert({ title: "Could not transfer ownership", body: r.error, tone: "danger" });
+                } else {
+                  dialog.toast({ body: `${targetLabel} is now the owner.`, tone: "success" });
+                  onChanged();
+                }
               }}
               className="rounded-md border border-bad/40 bg-bad/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-bad hover:bg-bad/15"
             >
@@ -466,10 +481,21 @@ function DangerSection({
           body="Workspace stays accessible but new filings stop until you reactivate."
           cta="Cancel"
           onClick={async () => {
-            if (!confirm("Cancel the subscription?")) return;
+            const ok = await dialog.confirm({
+              title: "Cancel the subscription?",
+              body: "The workspace stays accessible but new filings stop until you reactivate.",
+              confirmLabel: "Cancel subscription",
+              cancelLabel: "Keep it",
+              tone: "danger",
+            });
+            if (!ok) return;
             const r = await cancelSubscription();
-            if (!r.ok) alert(r.error);
-            else onChanged();
+            if (!r.ok) {
+              await dialog.alert({ title: "Could not cancel subscription", body: r.error, tone: "danger" });
+            } else {
+              dialog.toast({ body: "Subscription cancelled.", tone: "default" });
+              onChanged();
+            }
           }}
         />
         <div className="rounded-md border border-hairline bg-white p-4">
@@ -487,7 +513,9 @@ function DangerSection({
             <button
               onClick={async () => {
                 const r = await deleteWorkspace(confirmName);
-                if (!r.ok) alert(r.error);
+                if (!r.ok) {
+                  await dialog.alert({ title: "Could not delete workspace", body: r.error, tone: "danger" });
+                }
               }}
               className="rounded-md border border-bad/40 bg-bad/10 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-bad hover:bg-bad/15"
             >

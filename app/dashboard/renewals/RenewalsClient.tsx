@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { Pill } from "@/components/ui/Pill";
+import { useDialog } from "@/components/ui/Dialog";
 import {
   createLicense,
   deleteLicense,
@@ -37,6 +38,7 @@ export function RenewalsClient({
   agencies: AgencyOption[];
 }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "month" | "overdue">("all");
@@ -178,18 +180,34 @@ export function RenewalsClient({
                     value={r.automation_mode}
                     onChange={async (mode) => {
                       const res = await setAutomationMode(r.id, mode);
-                      if (!res.ok) alert(res.error);
-                      else refresh();
+                      if (!res.ok) {
+                        await dialog.alert({ title: "Could not change mode", body: res.error, tone: "danger" });
+                      } else {
+                        refresh();
+                      }
                     }}
                   />
                 </div>
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={async () => {
-                      const conf = prompt("Confirmation number (optional):") ?? undefined;
-                      const res = await markRenewalFiled(r.id, { confirmationNumber: conf || undefined });
-                      if (!res.ok) alert(res.error);
-                      else refresh();
+                      const conf = await dialog.prompt({
+                        title: `File ${r.license_type}`,
+                        body: "Record this renewal as filed. The confirmation number is optional but recommended for the audit trail.",
+                        label: "Confirmation number",
+                        placeholder: "ABC-123456",
+                        confirmLabel: "Mark filed",
+                      });
+                      if (conf === null) return;
+                      const res = await markRenewalFiled(r.id, {
+                        confirmationNumber: conf.trim() || undefined,
+                      });
+                      if (!res.ok) {
+                        await dialog.alert({ title: "Could not file renewal", body: res.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: `${r.license_type} marked filed.`, tone: "success" });
+                        refresh();
+                      }
                     }}
                     className="rounded-md border border-accent bg-accent px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-white hover:bg-accent-deep"
                   >
@@ -197,10 +215,20 @@ export function RenewalsClient({
                   </button>
                   <button
                     onClick={async () => {
-                      if (!confirm(`Remove ${r.license_type}? This deletes its history.`)) return;
+                      const ok = await dialog.confirm({
+                        title: `Remove ${r.license_type}?`,
+                        body: "This deletes the license and its filing history.",
+                        confirmLabel: "Delete",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
                       const res = await deleteLicense(r.id);
-                      if (!res.ok) alert(res.error);
-                      else refresh();
+                      if (!res.ok) {
+                        await dialog.alert({ title: "Could not delete license", body: res.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: `Removed ${r.license_type}.`, tone: "success" });
+                        refresh();
+                      }
                     }}
                     className="rounded-md border border-hairline bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
                   >

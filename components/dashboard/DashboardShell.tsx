@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Logo } from "@/components/ui/Logo";
 import { Pill } from "@/components/ui/Pill";
+import { DialogProvider } from "@/components/ui/Dialog";
 import { CHANGELOG } from "@/components/changelog/data";
 
 type IconName =
@@ -122,6 +123,7 @@ export function DashboardShell({
   const initials = initialsFor(displayUser);
 
   return (
+    <DialogProvider>
     <div className="flex min-h-screen bg-bgalt">
       <aside
         className={clsx(
@@ -343,6 +345,7 @@ export function DashboardShell({
 
       {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
     </div>
+    </DialogProvider>
   );
 }
 

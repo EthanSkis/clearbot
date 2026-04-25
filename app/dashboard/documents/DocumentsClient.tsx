@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
+import { useDialog } from "@/components/ui/Dialog";
 import { deleteDocument, getAuditPackUrls, getSignedUrl, registerDocument } from "./actions";
 
 export type DocumentRow = {
@@ -35,6 +36,7 @@ export function DocumentsClient({
   storageQuotaGb: number;
 }) {
   const router = useRouter();
+  const dialog = useDialog();
   const fileInput = useRef<HTMLInputElement>(null);
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
@@ -411,10 +413,20 @@ export function DocumentsClient({
                     <div className="flex items-center justify-end">
                       <button
                         onClick={async () => {
-                          if (!confirm(`Delete ${d.name}?`)) return;
+                          const ok = await dialog.confirm({
+                            title: `Delete ${d.name}?`,
+                            body: "The file is removed from storage and the audit trail entry is preserved.",
+                            confirmLabel: "Delete",
+                            tone: "danger",
+                          });
+                          if (!ok) return;
                           const r = await deleteDocument(d.id);
-                          if (!r.ok) alert(r.error);
-                          else refresh();
+                          if (!r.ok) {
+                            await dialog.alert({ title: "Could not delete document", body: r.error, tone: "danger" });
+                          } else {
+                            dialog.toast({ body: `Deleted ${d.name}.`, tone: "success" });
+                            refresh();
+                          }
                         }}
                         className="rounded border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                       >

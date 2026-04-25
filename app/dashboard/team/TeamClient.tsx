@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { ROLE_PERMISSIONS, type WorkspaceRole } from "@/lib/roles";
+import { useDialog } from "@/components/ui/Dialog";
 import { changeMemberRole, inviteMember, removeMember, revokeInvite } from "./actions";
 
 export type Member = {
@@ -43,6 +44,7 @@ export function TeamMembersTable({
   workspaceName: string;
 }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -119,8 +121,11 @@ export function TeamMembersTable({
                     value={m.role}
                     onChange={async (e) => {
                       const result = await changeMemberRole(m.id, e.target.value as WorkspaceRole);
-                      if (!result.ok) alert(result.error);
-                      else refresh();
+                      if (!result.ok) {
+                        await dialog.alert({ title: "Could not change role", body: result.error, tone: "danger" });
+                      } else {
+                        refresh();
+                      }
                     }}
                     className="h-7 rounded-md border border-hairline bg-white px-2 font-mono text-[10px] uppercase tracking-wider text-ink"
                   >
@@ -146,10 +151,20 @@ export function TeamMembersTable({
                 {canManage && !m.is_self && m.role !== "owner" && (
                   <button
                     onClick={async () => {
-                      if (!confirm(`Remove ${m.email} from ${workspaceName}?`)) return;
+                      const ok = await dialog.confirm({
+                        title: `Remove ${m.full_name ?? m.email}?`,
+                        body: `They lose access to ${workspaceName} immediately. Their audit-trail history is preserved.`,
+                        confirmLabel: "Remove",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
                       const r = await removeMember(m.id);
-                      if (!r.ok) alert(r.error);
-                      else refresh();
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not remove member", body: r.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: `${m.email} removed.`, tone: "success" });
+                        refresh();
+                      }
                     }}
                     className="rounded border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                   >
@@ -187,12 +202,19 @@ export function TeamMembersTable({
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const url = `${window.location.origin}/signup?invite=${inv.token}&email=${encodeURIComponent(
                         inv.email
                       )}`;
-                      navigator.clipboard.writeText(url);
-                      alert("Invite URL copied to clipboard.");
+                      try {
+                        await navigator.clipboard.writeText(url);
+                        dialog.toast({ body: "Invite URL copied to clipboard.", tone: "success" });
+                      } catch {
+                        await dialog.alert({
+                          title: "Couldn't copy",
+                          body: url,
+                        });
+                      }
                     }}
                     className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
                   >
@@ -201,9 +223,20 @@ export function TeamMembersTable({
                   {canManage && (
                     <button
                       onClick={async () => {
+                        const ok = await dialog.confirm({
+                          title: `Revoke ${inv.email}'s invite?`,
+                          body: "The link stops working immediately.",
+                          confirmLabel: "Revoke",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
                         const r = await revokeInvite(inv.id);
-                        if (!r.ok) alert(r.error);
-                        else refresh();
+                        if (!r.ok) {
+                          await dialog.alert({ title: "Could not revoke invite", body: r.error, tone: "danger" });
+                        } else {
+                          dialog.toast({ body: "Invite revoked.", tone: "success" });
+                          refresh();
+                        }
                       }}
                       className="rounded-md border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                     >

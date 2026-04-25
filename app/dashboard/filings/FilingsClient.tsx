@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Pill } from "@/components/ui/Pill";
+import { useDialog } from "@/components/ui/Dialog";
 import { advanceFilingStage, manualFile, rejectFiling } from "./actions";
 
 type Stage = "intake" | "prep" | "review" | "submit" | "confirm" | "done" | "rejected";
@@ -40,6 +41,7 @@ export type LicenseOption = {
 
 export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   function refresh() {
     startTransition(() => router.refresh());
@@ -120,8 +122,11 @@ export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
                   <button
                     onClick={async () => {
                       const r = await advanceFilingStage(f.id);
-                      if (!r.ok) alert(r.error);
-                      else refresh();
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not advance filing", body: r.error, tone: "danger" });
+                      } else {
+                        refresh();
+                      }
                     }}
                     className="rounded-md border border-accent bg-accent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-white hover:bg-accent-deep"
                   >
@@ -131,11 +136,22 @@ export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
                 {!isRejected && f.stage !== "done" && (
                   <button
                     onClick={async () => {
-                      const reason = prompt("Reason for rejection?");
+                      const reason = await dialog.prompt({
+                        title: "Reject this filing",
+                        body: "Capture why so the workspace activity log has the trail.",
+                        label: "Reason",
+                        placeholder: "Missing endorsement, etc.",
+                        confirmLabel: "Reject",
+                        required: true,
+                      });
                       if (!reason) return;
                       const r = await rejectFiling(f.id, reason);
-                      if (!r.ok) alert(r.error);
-                      else refresh();
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not reject filing", body: r.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: "Filing rejected.", tone: "default" });
+                        refresh();
+                      }
                     }}
                     className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
                   >

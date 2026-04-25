@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import { useDialog } from "@/components/ui/Dialog";
 import { addPaymentMethod, changePlan, deletePaymentMethod, generateMonthlyInvoice, markInvoicePaid } from "./actions";
 
 export type Invoice = {
@@ -34,6 +35,7 @@ const PLAN_TIER: Record<string, string> = {
 
 export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; canManage: boolean }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   return (
@@ -60,10 +62,11 @@ export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; 
                   onClick={async () => {
                     const r = await changePlan(p);
                     if (!r.ok) {
-                      alert(r.error);
+                      await dialog.alert({ title: "Could not change plan", body: r.error, tone: "danger" });
                       return;
                     }
                     setOpen(false);
+                    dialog.toast({ body: `Plan switched to ${PLAN_TIER[p]}.`, tone: "success" });
                     startTransition(() => router.refresh());
                   }}
                   className={clsx(
@@ -99,6 +102,7 @@ export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; 
 
 export function PaymentMethods({ rows, canManage }: { rows: PaymentMethod[]; canManage: boolean }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [adding, setAdding] = useState(false);
   const [kind, setKind] = useState<"wire" | "ach" | "card">("ach");
@@ -134,10 +138,20 @@ export function PaymentMethods({ rows, canManage }: { rows: PaymentMethod[]; can
                 {canManage && (
                   <button
                     onClick={async () => {
-                      if (!confirm("Remove this payment method?")) return;
+                      const ok = await dialog.confirm({
+                        title: "Remove this payment method?",
+                        body: `${m.label}${m.last4 ? ` ··${m.last4}` : ""} will no longer be used for autopay.`,
+                        confirmLabel: "Remove",
+                        tone: "danger",
+                      });
+                      if (!ok) return;
                       const r = await deletePaymentMethod(m.id);
-                      if (!r.ok) alert(r.error);
-                      else refresh();
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not remove method", body: r.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: "Payment method removed.", tone: "success" });
+                        refresh();
+                      }
                     }}
                     className="rounded-md border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                   >
@@ -159,13 +173,14 @@ export function PaymentMethods({ rows, canManage }: { rows: PaymentMethod[]; can
                 e.preventDefault();
                 const r = await addPaymentMethod({ kind, label, last4: last4 || undefined, primary });
                 if (!r.ok) {
-                  alert(r.error);
+                  await dialog.alert({ title: "Could not add payment method", body: r.error, tone: "danger" });
                   return;
                 }
                 setLabel("");
                 setLast4("");
                 setPrimary(false);
                 setAdding(false);
+                dialog.toast({ body: "Payment method added.", tone: "success" });
                 refresh();
               }}
               className="space-y-2 rounded-md border border-hairline bg-bgalt/40 p-3"
@@ -232,6 +247,7 @@ export function PaymentMethods({ rows, canManage }: { rows: PaymentMethod[]; can
 
 export function InvoicesTable({ rows, canManage }: { rows: Invoice[]; canManage: boolean }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   function refresh() {
     startTransition(() => router.refresh());
@@ -246,8 +262,12 @@ export function InvoicesTable({ rows, canManage }: { rows: Invoice[]; canManage:
           <button
             onClick={async () => {
               const r = await generateMonthlyInvoice();
-              if (!r.ok) alert(r.error);
-              else refresh();
+              if (!r.ok) {
+                await dialog.alert({ title: "Could not generate invoice", body: r.error, tone: "danger" });
+              } else {
+                dialog.toast({ body: "Invoice generated.", tone: "success" });
+                refresh();
+              }
             }}
             className="rounded-md border border-hairline bg-white px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
           >
@@ -309,8 +329,12 @@ export function InvoicesTable({ rows, canManage }: { rows: Invoice[]; canManage:
                 <button
                   onClick={async () => {
                     const r = await markInvoicePaid(inv.id);
-                    if (!r.ok) alert(r.error);
-                    else refresh();
+                    if (!r.ok) {
+                      await dialog.alert({ title: "Could not mark paid", body: r.error, tone: "danger" });
+                    } else {
+                      dialog.toast({ body: `${inv.short_id} marked paid.`, tone: "success" });
+                      refresh();
+                    }
                   }}
                   className="rounded-md border border-accent bg-accent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-white hover:bg-accent-deep"
                 >

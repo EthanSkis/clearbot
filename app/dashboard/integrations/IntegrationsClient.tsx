@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import { useDialog } from "@/components/ui/Dialog";
 import {
   connectIntegration,
   createWebhook,
@@ -60,6 +61,7 @@ export function IntegrationsGrid({
   available: IntegrationCardData[];
 }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   function refresh() {
     startTransition(() => router.refresh());
@@ -67,21 +69,40 @@ export function IntegrationsGrid({
 
   async function onToggle(card: IntegrationCardData) {
     if (card.id && card.status !== "disconnected") {
+      const ok = await dialog.confirm({
+        title: `Disconnect ${card.provider}?`,
+        body: "Sync will pause until you reconnect. Existing data stays put.",
+        confirmLabel: "Disconnect",
+        tone: "danger",
+      });
+      if (!ok) return;
       const r = await disconnectIntegration(card.id);
-      if (!r.ok) alert(r.error);
-      else refresh();
+      if (!r.ok) {
+        await dialog.alert({ title: "Could not disconnect", body: r.error, tone: "danger" });
+      } else {
+        dialog.toast({ body: `${card.provider} disconnected.`, tone: "default" });
+        refresh();
+      }
       return;
     }
     const r = await connectIntegration({ provider: card.provider, category: card.category });
-    if (!r.ok) alert(r.error);
-    else refresh();
+    if (!r.ok) {
+      await dialog.alert({ title: "Could not connect", body: r.error, tone: "danger" });
+    } else {
+      dialog.toast({ body: `${card.provider} connected.`, tone: "success" });
+      refresh();
+    }
   }
 
   async function onSync(card: IntegrationCardData) {
     if (!card.id) return;
     const r = await syncIntegration(card.id);
-    if (!r.ok) alert(r.error);
-    else refresh();
+    if (!r.ok) {
+      await dialog.alert({ title: "Sync failed", body: r.error, tone: "danger" });
+    } else {
+      dialog.toast({ body: `${card.provider} synced.`, tone: "success" });
+      refresh();
+    }
   }
 
   return (
@@ -163,6 +184,7 @@ function Card({
 
 export function WebhooksManager({ rows }: { rows: WebhookRow[] }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -201,8 +223,12 @@ export function WebhooksManager({ rows }: { rows: WebhookRow[] }) {
               <button
                 onClick={async () => {
                   const r = await fireTestWebhook(w.id);
-                  if (!r.ok) alert(r.error);
-                  else refresh();
+                  if (!r.ok) {
+                    await dialog.alert({ title: "Test webhook failed", body: r.error, tone: "danger" });
+                  } else {
+                    dialog.toast({ body: "Test event delivered.", tone: "success" });
+                    refresh();
+                  }
                 }}
                 className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
               >
@@ -210,10 +236,20 @@ export function WebhooksManager({ rows }: { rows: WebhookRow[] }) {
               </button>
               <button
                 onClick={async () => {
-                  if (!confirm("Delete this webhook?")) return;
+                  const ok = await dialog.confirm({
+                    title: "Delete this webhook?",
+                    body: w.url,
+                    confirmLabel: "Delete",
+                    tone: "danger",
+                  });
+                  if (!ok) return;
                   const r = await deleteWebhook(w.id);
-                  if (!r.ok) alert(r.error);
-                  else refresh();
+                  if (!r.ok) {
+                    await dialog.alert({ title: "Could not delete webhook", body: r.error, tone: "danger" });
+                  } else {
+                    dialog.toast({ body: "Webhook deleted.", tone: "success" });
+                    refresh();
+                  }
                 }}
                 className="rounded-md border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
               >
@@ -238,6 +274,7 @@ export function WebhooksManager({ rows }: { rows: WebhookRow[] }) {
               }
               setUrl("");
               setOpen(false);
+              dialog.toast({ body: "Webhook added.", tone: "success" });
               refresh();
             }}
             className="flex flex-wrap items-center gap-2"
@@ -295,6 +332,7 @@ export function WebhooksManager({ rows }: { rows: WebhookRow[] }) {
 
 export function ApiKeysManager({ rows, canManage }: { rows: ApiKeyRow[]; canManage: boolean }) {
   const router = useRouter();
+  const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [revealed, setRevealed] = useState<{ id: string; secret: string } | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -334,13 +372,25 @@ export function ApiKeysManager({ rows, canManage }: { rows: ApiKeyRow[]; canMana
                   {canManage && !k.revoked_at && (
                     <button
                       onClick={async () => {
-                        if (!confirm("Rotate this key? The current secret will stop working immediately.")) return;
+                        const ok = await dialog.confirm({
+                          title: "Rotate this API key?",
+                          body: "The current secret stops working immediately. Make sure callers are ready for the new one.",
+                          confirmLabel: "Rotate",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
                         const r = await rotateApiKey(k.id);
                         if (!r.ok) {
-                          alert(r.error);
+                          await dialog.alert({ title: "Could not rotate key", body: r.error, tone: "danger" });
                           return;
                         }
                         setRevealed({ id: k.id, secret: r.secret });
+                        await dialog.alert({
+                          title: "Save the new secret",
+                          body: r.secret,
+                          tone: "success",
+                          confirmLabel: "I've copied it",
+                        });
                         refresh();
                       }}
                       className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
@@ -351,10 +401,20 @@ export function ApiKeysManager({ rows, canManage }: { rows: ApiKeyRow[]; canMana
                   {canManage && !k.revoked_at && (
                     <button
                       onClick={async () => {
-                        if (!confirm("Revoke this key?")) return;
+                        const ok = await dialog.confirm({
+                          title: `Revoke ${k.name}?`,
+                          body: "Callers using this key will start getting 401s on their next request.",
+                          confirmLabel: "Revoke",
+                          tone: "danger",
+                        });
+                        if (!ok) return;
                         const r = await revokeApiKey(k.id);
-                        if (!r.ok) alert(r.error);
-                        else refresh();
+                        if (!r.ok) {
+                          await dialog.alert({ title: "Could not revoke key", body: r.error, tone: "danger" });
+                        } else {
+                          dialog.toast({ body: "Key revoked.", tone: "default" });
+                          refresh();
+                        }
                       }}
                       className="rounded-md border border-bad/30 bg-bad/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-bad hover:bg-bad/10"
                     >
@@ -390,7 +450,12 @@ export function ApiKeysManager({ rows, canManage }: { rows: ApiKeyRow[]; canMana
                 return;
               }
               setName("");
-              alert(`Save this key now — it will not be shown again:\n\n${r.secret}`);
+              await dialog.alert({
+                title: "Save this key now",
+                body: r.secret,
+                tone: "success",
+                confirmLabel: "I've copied it",
+              });
               refresh();
             }}
             className="flex flex-wrap items-center gap-2"
