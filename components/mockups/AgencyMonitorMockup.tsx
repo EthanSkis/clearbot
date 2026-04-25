@@ -54,14 +54,15 @@ export function AgencyMonitorMockup() {
   return (
     <div ref={containerRef} className="relative overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
       {/* header */}
-      <div className="flex items-center justify-between border-b border-hairline bg-bgalt/60 px-5 py-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 border-b border-hairline bg-bgalt/60 px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
           <LiveDot size={7} />
-          <span className="font-mono text-[11px] uppercase tracking-wider text-body">
-            Agency Monitor · 528 sources
+          <span className="truncate font-mono text-[11px] uppercase tracking-wider text-body">
+            <span className="hidden sm:inline">Agency Monitor · 528 sources</span>
+            <span className="sm:hidden">528 sources</span>
           </span>
         </div>
-        <span className="font-mono text-[11px] text-body">
+        <span className="shrink-0 font-mono text-[11px] text-body">
           live
         </span>
       </div>
@@ -74,10 +75,10 @@ export function AgencyMonitorMockup() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.25 }}
-            className="border-b border-accent/30 bg-accent-soft px-5 py-2.5"
+            className="border-b border-accent/30 bg-accent-soft px-4 py-2.5 sm:px-5"
           >
             <div className="flex items-center justify-between gap-3 font-mono text-[11px] text-accent-deep">
-              <span className="truncate">
+              <span className="min-w-0 truncate">
                 <span className="font-semibold">Form updated</span> ·{" "}
                 {updateBanner.code} · {updateBanner.name}
               </span>
@@ -93,7 +94,7 @@ export function AgencyMonitorMockup() {
           return (
             <li
               key={a.code}
-              className="flex items-center justify-between gap-3 px-5 py-3"
+              className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <span
@@ -132,8 +133,9 @@ export function AgencyMonitorMockup() {
         })}
       </ul>
 
-      <div className="border-t border-hairline bg-bgalt/60 px-5 py-2.5 text-center font-mono text-[10px] uppercase tracking-wider text-body">
-        Polling every 90s · 7 changes detected today
+      <div className="border-t border-hairline bg-bgalt/60 px-4 py-2.5 text-center font-mono text-[10px] uppercase tracking-wider text-body sm:px-5">
+        <span className="hidden sm:inline">Polling every 90s · 7 changes detected today</span>
+        <span className="sm:hidden">Polling 90s · 7 changes today</span>
       </div>
     </div>
   );
