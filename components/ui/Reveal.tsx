@@ -1,33 +1,47 @@
 "use client";
 
-import { motion, type HTMLMotionProps } from "framer-motion";
-import { type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import clsx from "clsx";
 
 type Props = {
   children: ReactNode;
   delay?: number;
   className?: string;
   as?: "div" | "section" | "li" | "span";
-} & Omit<HTMLMotionProps<"div">, "children" | "className">;
+};
 
-export function Reveal({
-  children,
-  delay = 0,
-  className,
-  as = "div",
-  ...rest
-}: Props) {
-  const Comp = motion[as] as typeof motion.div;
+export function Reveal({ children, delay = 0, className, as = "div" }: Props) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -10% 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const Tag = as;
   return (
-    <Comp
-      initial={{ opacity: 0 }}
-      whileInView={{ opacity: 1 }}
-      viewport={{ once: true, margin: "-10%" }}
-      transition={{ duration: 0.5, ease: "easeOut", delay }}
-      className={className}
-      {...rest}
+    <Tag
+      ref={ref as React.RefObject<never>}
+      className={clsx(
+        "transition-opacity duration-500 ease-out motion-reduce:transition-none",
+        shown ? "opacity-100" : "opacity-0",
+        className
+      )}
+      style={{ transitionDelay: `${delay}s` }}
     >
       {children}
-    </Comp>
+    </Tag>
   );
 }
