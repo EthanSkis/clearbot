@@ -327,13 +327,13 @@ function Breadcrumb({ pathname }: { pathname: string }) {
   const tabs = tabsFor(current.label, current.href);
   if (tabs.length === 0) return null;
   return (
-    <div className="flex items-center gap-1 overflow-x-auto px-4 md:px-8">
+    <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden px-4 md:px-8">
       {tabs.map((t, i) => (
         <Link
           key={t.label}
           href={t.href}
           className={clsx(
-            "relative -mb-px border-b-2 px-3 py-2.5 font-sans text-[13px] font-medium transition-colors",
+            "relative -mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 font-sans text-[13px] font-medium transition-colors",
             i === 0
               ? "border-ink text-ink"
               : "border-transparent text-body hover:text-ink"
