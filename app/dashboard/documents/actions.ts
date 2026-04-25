@@ -78,24 +78,65 @@ export async function getSignedUrl(storagePath: string): Promise<{ ok: true; url
   return { ok: true, url: data.signedUrl };
 }
 
-export async function getAuditPackUrls(): Promise<{ ok: true; urls: { name: string; url: string }[] } | { ok: false; error: string }> {
+export type AuditPackItem = {
+  id: string;
+  name: string;
+  kind: "certificate" | "receipt" | "application" | "correspondence";
+  url: string;
+  size_bytes: number;
+  uploaded_at: string;
+  location: string | null;
+  license_type: string | null;
+};
+
+export async function getAuditPackUrls(): Promise<
+  | { ok: true; workspace: string; generatedAt: string; items: AuditPackItem[] }
+  | { ok: false; error: string }
+> {
   const ctx = await requireContext();
   const supabase = createClient();
   const { data, error } = await supabase
     .from("documents")
-    .select("name, storage_path")
-    .eq("workspace_id", ctx.workspace.id);
+    .select(
+      "id, name, kind, size_bytes, storage_path, created_at, location:location_id(name, city, state), license:license_id(license_type)"
+    )
+    .eq("workspace_id", ctx.workspace.id)
+    .order("created_at", { ascending: false });
   if (error) return { ok: false, error: error.message };
 
-  const out: { name: string; url: string }[] = [];
+  const items: AuditPackItem[] = [];
   for (const row of data ?? []) {
     if (!row.storage_path) continue;
     const { data: signed } = await supabase.storage
       .from("documents")
       .createSignedUrl(row.storage_path as string, 60 * 30);
-    if (signed?.signedUrl) {
-      out.push({ name: row.name, url: signed.signedUrl });
-    }
+    if (!signed?.signedUrl) continue;
+    const loc = row.location as unknown as
+      | { name: string; city: string | null; state: string | null }
+      | null;
+    const lic = row.license as unknown as { license_type: string } | null;
+    items.push({
+      id: row.id as string,
+      name: row.name as string,
+      kind: row.kind as AuditPackItem["kind"],
+      url: signed.signedUrl,
+      size_bytes: (row.size_bytes as number) ?? 0,
+      uploaded_at: row.created_at as string,
+      location: loc ? `${loc.name}${loc.city ? ` · ${loc.city}` : ""}${loc.state ? `, ${loc.state}` : ""}` : null,
+      license_type: lic?.license_type ?? null,
+    });
   }
-  return { ok: true, urls: out };
+  await logActivity({
+    workspaceId: ctx.workspace.id,
+    type: "document",
+    title: "Generated audit pack",
+    detail: `${items.length} document${items.length === 1 ? "" : "s"} bundled`,
+    actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  return {
+    ok: true,
+    workspace: ctx.workspace.name,
+    generatedAt: new Date().toISOString(),
+    items,
+  };
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
 import { deleteDocument, getAuditPackUrls, getSignedUrl, registerDocument } from "./actions";
 
@@ -40,6 +41,7 @@ export function DocumentsClient({
   const [kindFilter, setKindFilter] = useState<"all" | DocumentRow["kind"]>("all");
   const [uploading, setUploading] = useState(false);
   const [uploads, setUploads] = useState<UploadEntry[]>([]);
+  const [auditPack, setAuditPack] = useState<AuditPackState | null>(null);
   const [viewer, setViewer] = useState<
     | { doc: DocumentRow; status: "loading" }
     | { doc: DocumentRow; status: "ready"; url: string }
@@ -165,30 +167,134 @@ export function DocumentsClient({
     });
   }
 
-  async function downloadAll() {
+  async function generateAuditPack() {
+    if (auditPack && auditPack.phase !== "done" && auditPack.phase !== "error") return;
+    setAuditPack({ phase: "preparing", total: 0, completed: 0 });
     const r = await getAuditPackUrls();
     if (!r.ok) {
-      alert(r.error);
+      setAuditPack({ phase: "error", total: 0, completed: 0, error: r.error });
       return;
     }
-    if (r.urls.length === 0) {
-      alert("Nothing to export yet.");
+    if (r.items.length === 0) {
+      setAuditPack({
+        phase: "error",
+        total: 0,
+        completed: 0,
+        error: "Nothing to export yet — upload a document first.",
+      });
       return;
     }
-    // Open each URL in a new tab — simple but reliable without an extra zip lib.
-    r.urls.forEach((u, i) => {
-      setTimeout(() => window.open(u.url, "_blank"), i * 250);
-    });
+    const total = r.items.length;
+    setAuditPack({ phase: "fetching", total, completed: 0 });
+
+    const zip = new JSZip();
+    const folder = (kind: AuditPackItem["kind"]) =>
+      ({
+        certificate: "certificates",
+        receipt: "receipts",
+        application: "applications",
+        correspondence: "correspondence",
+      })[kind];
+
+    const manifestRows: string[][] = [
+      ["filename", "kind", "license", "location", "uploaded_at", "size_bytes", "path_in_zip"],
+    ];
+    const usedNames = new Set<string>();
+    let okCount = 0;
+
+    for (let i = 0; i < r.items.length; i++) {
+      const item = r.items[i];
+      try {
+        const res = await fetch(item.url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const safeName = uniqueName(item.name, usedNames);
+        const pathInZip = `${folder(item.kind)}/${safeName}`;
+        zip.file(pathInZip, blob);
+        manifestRows.push([
+          safeName,
+          item.kind,
+          item.license_type ?? "",
+          item.location ?? "",
+          item.uploaded_at,
+          String(item.size_bytes),
+          pathInZip,
+        ]);
+        okCount++;
+      } catch (err) {
+        manifestRows.push([
+          item.name,
+          item.kind,
+          item.license_type ?? "",
+          item.location ?? "",
+          item.uploaded_at,
+          String(item.size_bytes),
+          `(failed: ${err instanceof Error ? err.message : "unknown"})`,
+        ]);
+      }
+      setAuditPack({ phase: "fetching", total, completed: i + 1 });
+    }
+
+    const manifestCsv = manifestRows
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    zip.file("manifest.csv", manifestCsv);
+    zip.file(
+      "README.txt",
+      [
+        `ClearBot audit pack`,
+        `Workspace: ${r.workspace}`,
+        `Generated: ${new Date(r.generatedAt).toLocaleString()}`,
+        `Documents bundled: ${okCount} of ${total}`,
+        ``,
+        `Folder layout:`,
+        `  certificates/   – issued license certificates`,
+        `  receipts/       – payment receipts`,
+        `  applications/   – submitted applications`,
+        `  correspondence/ – emails and letters`,
+        `  manifest.csv    – index of every file in this archive`,
+      ].join("\n")
+    );
+
+    setAuditPack({ phase: "zipping", total, completed: total });
+    const blob = await zip.generateAsync(
+      { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
+      (meta) => {
+        setAuditPack({
+          phase: "zipping",
+          total,
+          completed: total,
+          zipPct: meta.percent,
+        });
+      }
+    );
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safeWorkspace = r.workspace.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "workspace";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeWorkspace}-audit-pack-${stamp}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setAuditPack({ phase: "done", total, completed: total, ok: okCount });
   }
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
         <button
-          onClick={downloadAll}
-          className="rounded-md border border-hairline bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+          onClick={generateAuditPack}
+          disabled={isAuditPackBusy(auditPack)}
+          className={clsx(
+            "rounded-md border border-hairline bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink",
+            isAuditPackBusy(auditPack) && "cursor-not-allowed opacity-60"
+          )}
         >
-          Download all
+          {auditPackButtonLabel(auditPack)}
         </button>
         <button
           onClick={() => fileInput.current?.click()}
@@ -359,13 +465,17 @@ export function DocumentsClient({
           <div className="rounded-2xl border border-accent/30 bg-accent-soft p-5">
             <div className="font-mono text-[10px] uppercase tracking-wider text-accent-deep">Audit pack</div>
             <p className="mt-2 text-[13px] leading-[1.55] text-ink">
-              Generate signed URLs for every document in this workspace.
+              One ZIP with every document grouped by kind, plus a manifest.csv index and a README. Ready for an auditor.
             </p>
             <button
-              onClick={downloadAll}
-              className="mt-3 w-full rounded-full border border-accent bg-accent px-4 py-2 font-sans text-[13px] font-medium text-white hover:bg-accent-deep"
+              onClick={generateAuditPack}
+              disabled={isAuditPackBusy(auditPack)}
+              className={clsx(
+                "mt-3 w-full rounded-full border border-accent bg-accent px-4 py-2 font-sans text-[13px] font-medium text-white",
+                isAuditPackBusy(auditPack) ? "cursor-not-allowed opacity-70" : "hover:bg-accent-deep"
+              )}
             >
-              Generate audit pack
+              {auditPackButtonLabel(auditPack)}
             </button>
           </div>
         </aside>
@@ -376,7 +486,165 @@ export function DocumentsClient({
         uploads={uploads}
         onDismiss={dismissUpload}
       />
+      <AuditPackPanel
+        state={auditPack}
+        onDismiss={() => setAuditPack(null)}
+        hasUploads={uploads.length > 0}
+      />
     </>
+  );
+}
+
+type AuditPackState =
+  | { phase: "preparing"; total: number; completed: number }
+  | { phase: "fetching"; total: number; completed: number }
+  | { phase: "zipping"; total: number; completed: number; zipPct?: number }
+  | { phase: "done"; total: number; completed: number; ok: number }
+  | { phase: "error"; total: number; completed: number; error: string };
+
+type AuditPackItem = {
+  id: string;
+  name: string;
+  kind: "certificate" | "receipt" | "application" | "correspondence";
+  url: string;
+  size_bytes: number;
+  uploaded_at: string;
+  location: string | null;
+  license_type: string | null;
+};
+
+function isAuditPackBusy(state: AuditPackState | null) {
+  return Boolean(state && state.phase !== "done" && state.phase !== "error");
+}
+
+function auditPackButtonLabel(state: AuditPackState | null) {
+  if (!state) return "Generate audit pack";
+  if (state.phase === "preparing") return "Preparing…";
+  if (state.phase === "fetching") return `Bundling ${state.completed}/${state.total}…`;
+  if (state.phase === "zipping") {
+    const pct = state.zipPct !== undefined ? Math.floor(state.zipPct) : null;
+    return pct !== null ? `Zipping ${pct}%…` : "Zipping…";
+  }
+  if (state.phase === "done") return "Generate audit pack";
+  return "Try again";
+}
+
+function uniqueName(name: string, used: Set<string>) {
+  if (!used.has(name)) {
+    used.add(name);
+    return name;
+  }
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let i = 2;
+  while (used.has(`${stem} (${i})${ext}`)) i++;
+  const result = `${stem} (${i})${ext}`;
+  used.add(result);
+  return result;
+}
+
+function AuditPackPanel({
+  state,
+  onDismiss,
+  hasUploads,
+}: {
+  state: AuditPackState | null;
+  onDismiss: () => void;
+  hasUploads?: boolean;
+}) {
+  if (!state) return null;
+  const pct =
+    state.phase === "fetching"
+      ? state.total > 0
+        ? (state.completed / state.total) * 90
+        : 0
+      : state.phase === "zipping"
+        ? 90 + ((state.zipPct ?? 0) / 100) * 10
+        : state.phase === "done"
+          ? 100
+          : state.phase === "preparing"
+            ? 4
+            : 100;
+
+  const heading =
+    state.phase === "preparing"
+      ? "Preparing audit pack…"
+      : state.phase === "fetching"
+        ? `Fetching ${state.completed} of ${state.total}…`
+        : state.phase === "zipping"
+          ? "Zipping…"
+          : state.phase === "done"
+            ? "Audit pack downloaded"
+            : "Audit pack failed";
+
+  const isBusy = state.phase !== "done" && state.phase !== "error";
+
+  return (
+    <div
+      className={clsx(
+        "fixed right-4 z-40 w-[360px] overflow-hidden rounded-2xl border bg-white shadow-2xl",
+        hasUploads ? "bottom-[348px]" : "bottom-4",
+        state.phase === "error" ? "border-bad/40" : "border-hairline"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3 px-4 py-3">
+        <div className="flex items-center gap-2">
+          {isBusy ? <Spinner /> : state.phase === "done" ? <CheckMark /> : <ErrorMark />}
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">Audit pack</div>
+            <div className="font-display text-[14px] font-light text-ink">{heading}</div>
+          </div>
+        </div>
+        {!isBusy && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="rounded p-1 text-body hover:bg-bgalt hover:text-ink"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className="px-4 pb-3">
+        <div className="h-1 overflow-hidden rounded-full bg-bgalt">
+          <div
+            className={clsx(
+              "h-full transition-[width] duration-200 ease-out",
+              state.phase === "error"
+                ? "bg-bad"
+                : state.phase === "done"
+                  ? "bg-ok"
+                  : "bg-accent"
+            )}
+            style={{ width: `${Math.max(2, pct)}%` }}
+          />
+        </div>
+        {state.phase === "error" && (
+          <div className="mt-2 rounded-md border border-bad/30 bg-bad/5 px-2 py-1 text-[11px] text-bad">
+            {state.error}
+          </div>
+        )}
+        {state.phase === "done" && (
+          <div className="mt-2 font-mono text-[11px] text-body">
+            {state.ok} of {state.total} document{state.total === 1 ? "" : "s"} bundled. Check your downloads folder.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ErrorMark() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-bad">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
   );
 }
 
