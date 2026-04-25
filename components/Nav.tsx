@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { Logo } from "@/components/ui/Logo";
@@ -12,12 +12,17 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [authed, setAuthed] = useState<boolean | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setScrolled(!entry.isIntersecting),
+      { threshold: 0 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   useEffect(() => {
@@ -43,14 +48,16 @@ export function Nav() {
   }, []);
 
   return (
-    <header
-      className={clsx(
-        "fixed inset-x-0 top-0 z-50 transition-all duration-200",
-        scrolled
-          ? "border-b border-hairline bg-white/85 backdrop-blur-md"
-          : "border-b border-transparent bg-transparent"
-      )}
-    >
+    <>
+      <div ref={sentinelRef} aria-hidden className="absolute left-0 top-6 h-px w-px" />
+      <header
+        className={clsx(
+          "fixed inset-x-0 top-0 z-50 transition-colors duration-200",
+          scrolled
+            ? "border-b border-hairline bg-white/95 md:bg-white/85 md:backdrop-blur-md"
+            : "border-b border-transparent bg-transparent"
+        )}
+      >
       <div className="mx-auto flex h-16 w-full max-w-content items-center justify-between gap-6 px-6">
         <Link href="/" className="flex items-center gap-2">
           <Logo size={22} />
@@ -153,6 +160,7 @@ export function Nav() {
           </div>
         </nav>
       </div>
-    </header>
+      </header>
+    </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { motion, type HTMLMotionProps } from "framer-motion";
-import { type ReactNode } from "react";
+import { motion, useReducedMotion, type HTMLMotionProps } from "framer-motion";
+import { useEffect, useState, type ReactNode } from "react";
 
 type Props = {
   children: ReactNode;
@@ -10,6 +10,18 @@ type Props = {
   as?: "div" | "section" | "li" | "span";
 } & Omit<HTMLMotionProps<"div">, "children" | "className">;
 
+function useIsNarrow() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
+
 export function Reveal({
   children,
   delay = 0,
@@ -17,7 +29,18 @@ export function Reveal({
   as = "div",
   ...rest
 }: Props) {
+  const reduce = useReducedMotion();
+  const narrow = useIsNarrow();
   const Comp = motion[as] as typeof motion.div;
+
+  if (reduce || narrow) {
+    return (
+      <Comp className={className} {...rest}>
+        {children}
+      </Comp>
+    );
+  }
+
   return (
     <Comp
       initial={{ opacity: 0, y: 16 }}

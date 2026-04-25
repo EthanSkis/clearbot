@@ -1,10 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { AGENCIES } from "@/lib/data";
 import { LiveDot } from "@/components/ui/LiveDot";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 type RowState = {
   lastSync: number; // seconds since check
@@ -23,9 +24,10 @@ export function AgencyMonitorMockup() {
     name: string;
   } | null>(null);
   const [tick, setTick] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
+  useVisibleInterval(
+    () => {
       setTick((t) => t + 1);
       setRows((prev) => {
         const idx = Math.floor(Math.random() * prev.length);
@@ -35,9 +37,10 @@ export function AgencyMonitorMockup() {
             : { ...r, lastSync: r.lastSync + 1, flash: false }
         );
       });
-    }, 1500);
-    return () => window.clearInterval(id);
-  }, []);
+    },
+    1500,
+    containerRef
+  );
 
   useEffect(() => {
     if (tick > 0 && tick % 5 === 0) {
@@ -49,7 +52,7 @@ export function AgencyMonitorMockup() {
   }, [tick]);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
+    <div ref={containerRef} className="relative overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
       {/* header */}
       <div className="flex items-center justify-between border-b border-hairline bg-bgalt/60 px-5 py-3">
         <div className="flex items-center gap-2">
