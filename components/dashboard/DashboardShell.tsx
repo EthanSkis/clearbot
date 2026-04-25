@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Logo } from "@/components/ui/Logo";
 import { Pill } from "@/components/ui/Pill";
+import { CHANGELOG } from "@/components/changelog/data";
 
 type IconName =
   | "grid"
@@ -66,6 +67,15 @@ export type DashboardWorkspace = {
   role: string;
 };
 
+export type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  detail: string | null;
+  actor_label: string | null;
+  created_at: string;
+};
+
 function initialsFor(user: DashboardUser) {
   const source = (user.fullName || user.email || "").trim();
   if (!source) return "??";
@@ -83,17 +93,23 @@ export function DashboardShell({
   workspace,
   badges,
   automationDefault,
+  notifications,
 }: {
   children: ReactNode;
   user?: DashboardUser;
   workspace?: DashboardWorkspace;
   badges?: Partial<BadgeCounts>;
   automationDefault?: "alert" | "prep" | "auto";
+  notifications?: NotificationItem[];
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const pathname = usePathname() || "/dashboard";
   const router = useRouter();
+
+  const notifs = useMemo(() => notifications ?? [], [notifications]);
 
   const displayUser: DashboardUser = user ?? {
     email: "diana@meridiangroup.com",
@@ -276,8 +292,16 @@ export function DashboardShell({
             </form>
 
             <div className="ml-auto flex items-center gap-2">
-              <TopBarLink label="What's new" icon="sparkle" href="/changelog" />
-              <TopBarLink label="Notifications" icon="bell" href="/dashboard?view=activity" dot />
+              <TopBarButton
+                label="What's new"
+                icon="sparkle"
+                onClick={() => setChangelogOpen(true)}
+              />
+              <NotificationsBell
+                items={notifs}
+                open={notifOpen}
+                setOpen={setNotifOpen}
+              />
               <Link
                 href="/dashboard/locations?new=1"
                 className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
@@ -316,6 +340,8 @@ export function DashboardShell({
           </footer>
         </main>
       </div>
+
+      {changelogOpen && <ChangelogModal onClose={() => setChangelogOpen(false)} />}
     </div>
   );
 }
@@ -378,23 +404,30 @@ function tabsFor(label: string, base: string): Tab[] {
   }
 }
 
-function TopBarLink({
+function TopBarButton({
   label,
   icon,
-  href,
+  onClick,
+  active,
   dot,
 }: {
   label: string;
   icon: "bell" | "sparkle";
-  href: string;
+  onClick: () => void;
+  active?: boolean;
   dot?: boolean;
 }) {
   return (
-    <Link
-      href={href}
+    <button
+      type="button"
+      onClick={onClick}
       aria-label={label}
       title={label}
-      className="relative flex h-9 w-9 items-center justify-center rounded-md border border-hairline bg-white text-body transition-colors hover:text-ink"
+      aria-pressed={active}
+      className={clsx(
+        "relative flex h-9 w-9 items-center justify-center rounded-md border bg-white text-body transition-colors hover:text-ink",
+        active ? "border-ink text-ink" : "border-hairline"
+      )}
     >
       {icon === "bell" ? (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -409,7 +442,260 @@ function TopBarLink({
       {dot && (
         <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-bad ring-2 ring-white" />
       )}
-    </Link>
+    </button>
+  );
+}
+
+const NOTIF_TYPE_META: Record<string, { label: string; dot: string; ring: string }> = {
+  filed: { label: "FILED", dot: "bg-ok", ring: "ring-ok/20" },
+  prepared: { label: "PREP", dot: "bg-accent", ring: "ring-accent/20" },
+  alert: { label: "ALERT", dot: "bg-bad", ring: "ring-bad/20" },
+  agency: { label: "AGENCY", dot: "bg-ink", ring: "ring-ink/20" },
+  payment: { label: "PAY", dot: "bg-warn", ring: "ring-warn/20" },
+  team: { label: "TEAM", dot: "bg-body", ring: "ring-body/20" },
+  integration: { label: "INTEGRATION", dot: "bg-accent-deep", ring: "ring-accent-deep/20" },
+  setting: { label: "CONFIG", dot: "bg-body", ring: "ring-body/20" },
+  document: { label: "DOC", dot: "bg-warn", ring: "ring-warn/20" },
+};
+
+function NotificationsBell({
+  items,
+  open,
+  setOpen,
+}: {
+  items: NotificationItem[];
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, setOpen]);
+
+  const hasItems = items.length > 0;
+
+  return (
+    <div ref={ref} className="relative">
+      <TopBarButton
+        label="Notifications"
+        icon="bell"
+        onClick={() => setOpen(!open)}
+        active={open}
+        dot={hasItems}
+      />
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Notifications"
+          className="absolute right-0 top-full z-50 mt-2 w-[360px] overflow-hidden rounded-xl border border-hairline bg-white shadow-card-lg"
+        >
+          <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-wider text-body">
+                Activity
+              </div>
+              <div className="font-display text-[16px] font-light text-ink">
+                {hasItems ? `${items.length} recent event${items.length === 1 ? "" : "s"}` : "All quiet."}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close"
+              className="rounded p-1 text-body hover:bg-bgalt hover:text-ink"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <ul className="max-h-[420px] divide-y divide-hairline overflow-y-auto">
+            {!hasItems && (
+              <li className="px-5 py-8 text-center font-mono text-[12px] text-body">
+                No activity yet. Add a location, license, or integration to fill this feed.
+              </li>
+            )}
+            {items.map((a) => {
+              const meta = NOTIF_TYPE_META[a.type] ?? NOTIF_TYPE_META.setting;
+              return (
+                <li key={a.id} className="flex gap-3 px-4 py-3">
+                  <span
+                    className={clsx(
+                      "mt-1 h-2 w-2 shrink-0 rounded-full ring-4",
+                      meta.dot,
+                      meta.ring
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-[13px] font-medium leading-snug text-ink">
+                        {a.title}
+                      </div>
+                      <span className="shrink-0 font-mono text-[10px] text-body">
+                        {timeAgo(a.created_at)}
+                      </span>
+                    </div>
+                    {a.detail && (
+                      <div className="mt-0.5 truncate text-[12px] text-body">{a.detail}</div>
+                    )}
+                    {a.actor_label && (
+                      <div className="mt-1 font-mono text-[10px] uppercase tracking-wider text-body">
+                        <span className="rounded-sm bg-bgalt px-1.5 py-0.5">{meta.label}</span>
+                        <span className="ml-2">{a.actor_label}</span>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="border-t border-hairline bg-bgalt/60 px-4 py-2.5 text-right">
+            <Link
+              href="/dashboard"
+              onClick={() => setOpen(false)}
+              className="font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              See all on overview →
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function timeAgo(iso: string) {
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return "just now";
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
+  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  if (ms < 7 * 86_400_000) return `${Math.floor(ms / 86_400_000)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+const CHANGELOG_TAG_META: Record<string, string> = {
+  feature: "bg-accent-soft text-accent-deep border-accent/30",
+  improvement: "bg-ink/5 text-ink border-hairline",
+  fix: "bg-warn/10 text-warn border-warn/30",
+  agency: "bg-ink text-white border-ink",
+  security: "bg-bad/10 text-bad border-bad/30",
+};
+
+function ChangelogModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-ink/40 p-4 md:items-center"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="What's new"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full w-full max-w-[720px] flex-col overflow-hidden rounded-2xl border border-hairline bg-white shadow-2xl"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">
+              {CHANGELOG.length} releases · updated weekly
+            </div>
+            <div className="mt-0.5 font-display text-[22px] font-light text-ink">
+              What&apos;s new
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/changelog"
+              onClick={onClose}
+              className="rounded-md border border-hairline bg-white px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              Open full page
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-2 text-body hover:bg-bgalt hover:text-ink"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          {CHANGELOG.map((e) => (
+            <article
+              key={e.id}
+              className="rounded-xl border border-hairline bg-white p-5 shadow-card"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                {e.tags.map((t) => (
+                  <span
+                    key={t}
+                    className={clsx(
+                      "rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider",
+                      CHANGELOG_TAG_META[t] ?? "border-hairline bg-white text-body"
+                    )}
+                  >
+                    {t}
+                  </span>
+                ))}
+                <span className="font-mono text-[11px] text-body">
+                  {new Date(e.date).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+              <h3 className="mt-3 font-display text-[18px] font-light leading-tight text-ink">
+                {e.title}
+              </h3>
+              <p className="mt-2 text-[13px] leading-[1.6] text-body">{e.summary}</p>
+              <ul className="mt-3 space-y-1.5">
+                {e.bullets.map((b, i) => (
+                  <li key={i} className="flex gap-2.5 text-[13px] leading-[1.55] text-body">
+                    <span className="mt-[9px] inline-block h-[3px] w-[3px] shrink-0 rounded-full bg-body/60" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

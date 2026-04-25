@@ -41,6 +41,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     { count: documentsCount },
     { count: teamCount },
     { count: integrationsCount },
+    { data: notificationRows },
   ] = await Promise.all([
     supabase.from("locations").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("status", "active"),
     supabase
@@ -64,6 +65,12 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .neq("status", "disconnected"),
+    supabase
+      .from("activity_log")
+      .select("id, type, title, detail, actor_label, created_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(12),
   ]);
 
   const workspace: DashboardWorkspace = {
@@ -94,6 +101,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         team: teamCount ?? 0,
         integrations: integrationsCount ?? 0,
       }}
+      notifications={(notificationRows ?? []).map((n) => ({
+        id: n.id as string,
+        type: n.type as string,
+        title: n.title as string,
+        detail: (n.detail as string | null) ?? null,
+        actor_label: (n.actor_label as string | null) ?? null,
+        created_at: n.created_at as string,
+      }))}
     >
       {children}
     </DashboardShell>
