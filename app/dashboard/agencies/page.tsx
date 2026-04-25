@@ -184,9 +184,27 @@ export default async function AgenciesPage() {
       <section>
         <SectionHeader title="Knowledge base" subtitle="Form templates, fee schedules, agency contacts — kept current." />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <KbCard title="Form templates" count={String((agencyCount ?? 0) * 4)} body="Every current form version, diffed against history, ready to pre-fill." href="#" />
-          <KbCard title="Fee schedules" count={String((agencyCount ?? 0) * 3)} body="Live per-jurisdiction pricing. Automatically applied at filing time." href="#" />
-          <KbCard title="Agency contacts" count={String((agencyCount ?? 0) * 8)} body="Direct lines for escalations. Pre-routed when a filing stalls." href="#" />
+          <KbCard
+            title="Form templates"
+            count={String((agencyCount ?? 0) * 4)}
+            body="Every current form version, diffed against history, ready to pre-fill."
+            href="/dashboard/filings"
+            cta="Open queue →"
+          />
+          <KbCard
+            title="Fee schedules"
+            count={String((agencyCount ?? 0) * 3)}
+            body="Live per-jurisdiction pricing. Automatically applied at filing time."
+            href="/dashboard/renewals"
+            cta="View renewals →"
+          />
+          <KbCard
+            title="Agency contacts"
+            count={String((agencyCount ?? 0) * 8)}
+            body="Direct lines for escalations. Pre-routed when a filing stalls."
+            href="/map"
+            cta="Open map →"
+          />
         </div>
       </section>
     </>
@@ -208,11 +226,13 @@ function KbCard({
   count,
   body,
   href,
+  cta,
 }: {
   title: string;
   count: string;
   body: string;
   href: string;
+  cta: string;
 }) {
   return (
     <div className="rounded-xl border border-hairline bg-white p-5 shadow-card">
@@ -227,7 +247,7 @@ function KbCard({
         href={href}
         className="mt-3 inline-block font-mono text-[11px] uppercase tracking-wider text-accent-deep hover:text-accent"
       >
-        Open →
+        {cta}
       </Link>
     </div>
   );

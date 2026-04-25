@@ -32,7 +32,7 @@ type Filter = "all" | "attention";
 export function LocationsClient({ rows }: { rows: LocationRow[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [filter, setFilter] = useState<Filter>("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<LocationRow | null>(null);
@@ -44,6 +44,8 @@ export function LocationsClient({ rows }: { rows: LocationRow[] }) {
       setEditing(null);
       setDrawerOpen(true);
     }
+    const q = searchParams.get("q");
+    if (q !== null) setSearch(q);
   }, [searchParams]);
 
   const filtered = useMemo(() => {

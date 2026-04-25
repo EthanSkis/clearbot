@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Logo } from "@/components/ui/Logo";
 import { Pill } from "@/components/ui/Pill";
@@ -91,7 +91,9 @@ export function DashboardShell({
   automationDefault?: "alert" | "prep" | "auto";
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
   const pathname = usePathname() || "/dashboard";
+  const router = useRouter();
 
   const displayUser: DashboardUser = user ?? {
     email: "diana@meridiangroup.com",
@@ -121,8 +123,9 @@ export function DashboardShell({
         </div>
 
         <div className="border-b border-hairline px-3 py-3">
-          <button
-            type="button"
+          <Link
+            href="/dashboard/settings"
+            onClick={() => setSidebarOpen(false)}
             className="flex w-full items-center justify-between gap-2 rounded-md border border-hairline bg-bgalt px-3 py-2 text-left transition-colors hover:bg-white"
           >
             <div className="min-w-0">
@@ -134,7 +137,7 @@ export function DashboardShell({
               </div>
             </div>
             <Chevron />
-          </button>
+          </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 py-3">
@@ -244,7 +247,16 @@ export function DashboardShell({
               </svg>
             </button>
 
-            <div className="relative hidden max-w-[440px] flex-1 md:block">
+            <form
+              role="search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const q = searchValue.trim();
+                if (!q) return;
+                router.push(`/dashboard/locations?q=${encodeURIComponent(q)}`);
+              }}
+              className="relative hidden max-w-[440px] flex-1 md:block"
+            >
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-body">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="11" cy="11" r="8" />
@@ -253,17 +265,19 @@ export function DashboardShell({
               </span>
               <input
                 type="search"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
                 placeholder="Search licenses, locations, agencies…"
-                className="h-9 w-full rounded-md border border-hairline bg-bgalt pl-9 pr-20 font-sans text-[13px] text-ink outline-none transition-colors placeholder:text-body/70 focus:border-accent focus:bg-white"
+                className="h-9 w-full rounded-md border border-hairline bg-bgalt pl-9 pr-12 font-sans text-[13px] text-ink outline-none transition-colors placeholder:text-body/70 focus:border-accent focus:bg-white"
               />
               <kbd className="pointer-events-none absolute inset-y-0 right-2 my-auto flex h-5 items-center rounded border border-hairline bg-white px-1.5 font-mono text-[10px] text-body">
-                ⌘K
+                ↵
               </kbd>
-            </div>
+            </form>
 
             <div className="ml-auto flex items-center gap-2">
-              <TopBarButton label="What's new" icon="sparkle" />
-              <TopBarButton label="Notifications" icon="bell" dot />
+              <TopBarLink label="What's new" icon="sparkle" href="/changelog" />
+              <TopBarLink label="Notifications" icon="bell" href="/dashboard?view=activity" dot />
               <Link
                 href="/dashboard/locations?new=1"
                 className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
@@ -306,15 +320,18 @@ export function DashboardShell({
   );
 }
 
+type Tab = { label: string; href: string };
+
 function Breadcrumb({ pathname }: { pathname: string }) {
   const current = NAV.find((n) => isActive(pathname, n.href)) ?? NAV[0];
-  const tabs = tabsFor(current.label);
+  const tabs = tabsFor(current.label, current.href);
+  if (tabs.length === 0) return null;
   return (
     <div className="flex items-center gap-1 overflow-x-auto px-4 md:px-8">
       {tabs.map((t, i) => (
-        <a
-          key={t}
-          href="#"
+        <Link
+          key={t.label}
+          href={t.href}
           className={clsx(
             "relative -mb-px border-b-2 px-3 py-2.5 font-sans text-[13px] font-medium transition-colors",
             i === 0
@@ -322,53 +339,61 @@ function Breadcrumb({ pathname }: { pathname: string }) {
               : "border-transparent text-body hover:text-ink"
           )}
         >
-          {t}
-        </a>
+          {t.label}
+        </Link>
       ))}
     </div>
   );
 }
 
-function tabsFor(label: string): string[] {
+function tabsFor(label: string, base: string): Tab[] {
   switch (label) {
     case "Overview":
-      return ["Overview", "Renewals", "Filings", "Documents", "Reports"];
+      return [
+        { label: "Overview", href: base },
+        { label: "Renewals", href: "/dashboard/renewals" },
+        { label: "Filings", href: "/dashboard/filings" },
+        { label: "Documents", href: "/dashboard/documents" },
+      ];
     case "Locations":
-      return ["All locations", "By state", "Managers", "Tags", "Archived"];
+      return [{ label: "All locations", href: base }];
     case "Renewals":
-      return ["Upcoming", "Calendar", "By agency", "Overdue", "Completed"];
+      return [{ label: "Upcoming", href: base }];
     case "Filings":
-      return ["Queue", "History", "Approvals", "Receipts", "Errors"];
+      return [{ label: "Queue", href: base }];
     case "Documents":
-      return ["Library", "Receipts", "Certificates", "Correspondence", "Trash"];
+      return [{ label: "Library", href: base }];
     case "Agencies":
-      return ["Monitor", "Knowledge base", "Forms", "Changes", "Fee schedules"];
+      return [{ label: "Monitor", href: base }];
     case "Team":
-      return ["Members", "Roles", "Activity", "Invites", "SSO"];
+      return [{ label: "Members", href: base }];
     case "Integrations":
-      return ["Connected", "Catalog", "Webhooks", "API keys", "Events"];
+      return [{ label: "Connected", href: base }];
     case "Billing":
-      return ["Plan", "Invoices", "Payment", "Usage", "Contracts"];
+      return [{ label: "Plan", href: base }];
     case "Settings":
-      return ["General", "Security", "Notifications", "Developer", "Danger"];
+      return [{ label: "General", href: base }];
     default:
-      return ["Overview"];
+      return [];
   }
 }
 
-function TopBarButton({
+function TopBarLink({
   label,
   icon,
+  href,
   dot,
 }: {
   label: string;
   icon: "bell" | "sparkle";
+  href: string;
   dot?: boolean;
 }) {
   return (
-    <button
-      type="button"
+    <Link
+      href={href}
       aria-label={label}
+      title={label}
       className="relative flex h-9 w-9 items-center justify-center rounded-md border border-hairline bg-white text-body transition-colors hover:text-ink"
     >
       {icon === "bell" ? (
@@ -384,7 +409,7 @@ function TopBarButton({
       {dot && (
         <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-bad ring-2 ring-white" />
       )}
-    </button>
+    </Link>
   );
 }
 
