@@ -20,8 +20,8 @@ export function Reveal({
   const Comp = motion[as] as typeof motion.div;
   return (
     <Comp
-      initial={{ opacity: 0, y: 16 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
       viewport={{ once: true, margin: "-10%" }}
       transition={{ duration: 0.5, ease: "easeOut", delay }}
       className={className}
