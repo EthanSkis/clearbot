@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { createClient } from "@/lib/supabase/client";
@@ -39,6 +39,12 @@ export function DocumentsClient({
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"all" | DocumentRow["kind"]>("all");
   const [uploading, setUploading] = useState(false);
+  const [viewer, setViewer] = useState<
+    | { doc: DocumentRow; status: "loading" }
+    | { doc: DocumentRow; status: "ready"; url: string }
+    | { doc: DocumentRow; status: "error"; error: string }
+    | null
+  >(null);
 
   const totalBytes = rows.reduce((s, r) => s + r.size_bytes, 0);
   const usedGb = totalBytes / 1024 / 1024 / 1024;
@@ -100,14 +106,18 @@ export function DocumentsClient({
     }
   }
 
-  async function downloadDocument(row: DocumentRow) {
-    if (!row.storage_path) return;
-    const r = await getSignedUrl(row.storage_path);
-    if (!r.ok) {
-      alert(r.error);
+  async function openViewer(row: DocumentRow) {
+    if (!row.storage_path) {
+      setViewer({ doc: row, status: "error", error: "No file is attached to this document." });
       return;
     }
-    window.open(r.url, "_blank");
+    setViewer({ doc: row, status: "loading" });
+    const r = await getSignedUrl(row.storage_path);
+    setViewer((current) => {
+      if (!current || current.doc.id !== row.id) return current;
+      if (!r.ok) return { doc: row, status: "error", error: r.error };
+      return { doc: row, status: "ready", url: r.url };
+    });
   }
 
   async function downloadAll() {
@@ -218,7 +228,7 @@ export function DocumentsClient({
                       <FileIcon />
                       <div className="min-w-0">
                         <button
-                          onClick={() => downloadDocument(d)}
+                          onClick={() => openViewer(d)}
                           className="block truncate text-left text-[13px] font-medium text-ink hover:text-accent-deep"
                         >
                           {d.name}
@@ -315,7 +325,148 @@ export function DocumentsClient({
           </div>
         </aside>
       </section>
+
+      {viewer && <DocumentViewer state={viewer} onClose={() => setViewer(null)} />}
     </>
+  );
+}
+
+type ViewerKind = "pdf" | "image" | "text" | "other";
+
+function viewerKindFor(name: string): ViewerKind {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"].includes(ext)) return "image";
+  if (["txt", "csv", "json", "md", "log", "xml", "yml", "yaml"].includes(ext)) return "text";
+  return "other";
+}
+
+function DocumentViewer({
+  state,
+  onClose,
+}: {
+  state:
+    | { doc: DocumentRow; status: "loading" }
+    | { doc: DocumentRow; status: "ready"; url: string }
+    | { doc: DocumentRow; status: "error"; error: string };
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const { doc } = state;
+  const kind = viewerKindFor(doc.name);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={doc.name}
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-ink/50 p-4 md:items-center"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full w-full max-w-[1080px] flex-col overflow-hidden rounded-2xl border border-hairline bg-white shadow-2xl"
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
+          <div className="min-w-0">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">
+              {KIND_LABEL[doc.kind]} · {formatBytes(doc.size_bytes)}
+            </div>
+            <div className="mt-0.5 truncate font-display text-[18px] font-light text-ink">
+              {doc.name}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {state.status === "ready" && (
+              <>
+                <a
+                  href={state.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-md border border-hairline bg-white px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
+                >
+                  Open in tab
+                </a>
+                <a
+                  href={state.url}
+                  download={doc.name}
+                  className="rounded-md border border-accent bg-accent px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-white hover:bg-accent-deep"
+                >
+                  Download
+                </a>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-2 text-body hover:bg-bgalt hover:text-ink"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div className="flex min-h-[360px] flex-1 items-center justify-center overflow-auto bg-bgalt/40">
+          {state.status === "loading" && (
+            <div className="font-mono text-[12px] text-body">Generating signed URL…</div>
+          )}
+          {state.status === "error" && (
+            <div className="rounded-md border border-bad/30 bg-bad/5 px-4 py-3 font-mono text-[12px] text-bad">
+              {state.error}
+            </div>
+          )}
+          {state.status === "ready" && kind === "pdf" && (
+            <iframe
+              src={state.url}
+              title={doc.name}
+              className="h-[78vh] w-full border-0 bg-white"
+            />
+          )}
+          {state.status === "ready" && kind === "image" && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={state.url}
+              alt={doc.name}
+              className="max-h-[78vh] w-auto object-contain"
+            />
+          )}
+          {state.status === "ready" && kind === "text" && (
+            <iframe
+              src={state.url}
+              title={doc.name}
+              className="h-[78vh] w-full border-0 bg-white"
+            />
+          )}
+          {state.status === "ready" && kind === "other" && (
+            <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <FileIcon />
+              <div className="font-display text-[18px] font-light text-ink">
+                Preview not available for this file type.
+              </div>
+              <p className="max-w-[360px] text-[13px] text-body">
+                Use Download or Open in tab to view {doc.name}.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
