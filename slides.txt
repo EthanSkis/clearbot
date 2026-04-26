@@ -1,0 +1,237 @@
+CLEARBOT PITCH DECK — BRIEF FOR CLAUDE DESIGN
+==============================================
+
+Audience: seed/Series A investors and prospective design-partner customers
+   (multi-location restaurant / hospitality / cannabis operators).
+Length: 12 slides.
+Tone: matter-of-fact, technical, not over-polished. Mirror the product's
+   monospace/serif visual language — no stock photos, no AI gradients.
+   Black text on white, single accent color (deep teal or muted green),
+   one display serif for headings, one geometric sans for body, one mono
+   for data labels. No emoji. No drop shadows.
+
+Brand language to reuse verbatim where it fits: "intake → prep → review →
+submit → confirm → done"; "audit pack"; "agency engine"; "filings in
+flight"; "agency change feed"; "deadline lead time".
+
+A note on honesty: ClearBot today is a real renewal-tracking, packet-
+preparing, and reminder-sending product. Actually filing into agency
+portals is *scaffolded* (adapter interface, credentials vault) but not
+implemented per agency yet — that's the next 12–18 months of work. Don't
+imply otherwise. Investors will discount the deck more if the founder
+oversells than if scope is honest.
+
+------------------------------------------------------------------------
+SLIDE 1 — COVER
+------------------------------------------------------------------------
+Title (display serif, 72px):
+   ClearBot
+Tagline (sans, 22px):
+   Renewal compliance, automated end-to-end — for operators with too
+   many licenses to track in a spreadsheet.
+Footer (mono, 10px): clearbot.io · seed deck · 2026
+Visual: empty 1px hairline frame around the canvas. No logo mark needed.
+
+------------------------------------------------------------------------
+SLIDE 2 — THE PROBLEM
+------------------------------------------------------------------------
+Title: A 50-location operator runs ~400 license renewals a year.
+Body (3 short paragraphs):
+   • Each location holds 6–10 licenses across federal, state, county,
+     and municipal agencies — liquor, food service, fire, signage, sales
+     tax, health, alcohol distribution, etc.
+   • Every agency has its own portal, its own PDF, its own fee, its own
+     deadline. Forms change quietly. Portals reset cookies. Fees move.
+   • Today this is a Google Sheet, two part-time admins, and a stack of
+     printed reminders. One missed renewal = a closed location for days
+     and a $20k+ regulatory fine.
+Visual: a simple table-as-illustration listing 6 representative agencies
+   (TX TABC, CA ABC, NYC DOH, Chicago DOB, Atlanta Fire, FDA) with a
+   "deadline" column and one row showing "MISSED". No real customer
+   names.
+
+------------------------------------------------------------------------
+SLIDE 3 — THE SOLUTION
+------------------------------------------------------------------------
+Title: ClearBot is the renewal stack itself, not a calendar.
+Body — 4 capability bullets (one line each, mono labels):
+   ALERT      — emails the right person before each deadline, escalates
+                if the filing stalls.
+   PREP       — fills the agency's PDF from your license + location data
+                and uploads it for review.
+   FILE       — submits the packet to the agency portal and pays the fee
+                via virtual card (in pilot).
+   WATCH      — diffs every agency form/portal daily; bumps any in-flight
+                filing back to review when something changes.
+Visual: a 4-stage horizontal pipeline. Each stage = a labeled box with
+   a one-word state below. Connect with → arrows. Same shape repeats on
+   slides 5 and 7.
+
+------------------------------------------------------------------------
+SLIDE 4 — HOW IT WORKS (PRODUCT WALKTHROUGH)
+------------------------------------------------------------------------
+Title: One filing, end to end.
+Body: number the steps 1–6, two-line each:
+   1. Operator adds a license. ClearBot stores expiry, fee, agency,
+      and automation mode (alert / prep / auto).
+   2. Daily sweep finds licenses entering the lead window. Opens an
+      intake filing and emails the responsible member.
+   3. Worker fills the agency's PDF template (or synthesizes one) and
+      attaches it to the filing as the packet.
+   4. Reviewer opens the filing, opens the packet, hits Approve. Filing
+      moves to review → submit.
+   5. Adapter logs into the agency portal, uploads the packet, pays the
+      fee, captures the confirmation number and receipt.
+   6. License expiry rolls forward by its cycle. Activity, packet, and
+      receipt land in the audit pack ZIP.
+Visual: stacked rounded rectangles ("cards"), one per step, with a left
+   gutter showing the stage label (intake/prep/review/submit/confirm/done).
+
+------------------------------------------------------------------------
+SLIDE 5 — DASHBOARD SCREENSHOT
+------------------------------------------------------------------------
+Title: The operator's view of their compliance posture.
+Body: 1-line caption only.
+Visual: single screenshot of the live /dashboard page, framed in a
+   1px hairline rectangle with a mono caption underneath:
+   "clearbot.io/dashboard · live, no mocks"
+   If a real screenshot is unavailable, use a faithful re-illustration
+   showing: KPI strip (licenses / renewals due / in-flight / audit pack),
+   filings-in-flight table with stage progress bars, agency change feed.
+
+------------------------------------------------------------------------
+SLIDE 6 — WHY NOW
+------------------------------------------------------------------------
+Title: Three forces converged in the last 24 months.
+Body — three columns:
+   PORTALS        State and county agencies finally moved off paper. 80%
+                  of the high-volume agencies now have web portals an RPA
+                  agent can drive.
+   PAYMENTS       Stripe Issuing makes per-customer virtual cards trivial.
+                  Agencies that take cards are payable without ACH.
+   AGENTS         Browser RPA + LLM-driven form filling is finally
+                  reliable enough to deploy unsupervised on agency UIs
+                  that change quietly.
+Visual: three vertical columns, equal width, no icons. Each column has a
+   label, one short sentence, and a mono "↑" indicator at the bottom.
+
+------------------------------------------------------------------------
+SLIDE 7 — ARCHITECTURE
+------------------------------------------------------------------------
+Title: Built like a payments stack, not a SaaS form.
+Body — three labeled boxes connected by arrows:
+   DASHBOARD (Next.js / Vercel)  →  POSTGRES JOB QUEUE (Supabase)
+        ↘                                       ↙
+              WORKER FLEET (Render / Fly, tsx + Playwright)
+                       ↓
+              PER-AGENCY ADAPTERS (1 file per agency)
+Below the diagram, in mono:
+   - Vercel Cron enqueues jobs; workers lease + execute.
+   - Workspace-scoped RLS, service-role key for cron + worker.
+   - HMAC-signed outbound webhooks · public REST API at /api/v1.
+   - Per-row envelope-encrypted agency credentials.
+Visual: the 3-box architecture diagram, hairline boxes, no fill.
+
+------------------------------------------------------------------------
+SLIDE 8 — TRACTION & STATUS
+------------------------------------------------------------------------
+Title: Where the build is today.
+Body — two columns, "shipping" vs "in pilot":
+   SHIPPING (live in production at clearbot.io)
+      • Multi-tenant dashboard, RBAC, onboarding
+      • License + filing + document CRUD with audit pack ZIP export
+      • Daily sweep + email reminders + escalation
+      • Packet generation (PDF template fill, falls back to synthetic)
+      • Per-filing detail, activity log, webhook delivery log
+      • Public REST API + webhook subscriptions + API key management
+      • 100+ federal/state/county/municipal agencies in the seed catalog
+
+   IN PILOT / NEXT
+      • Real agency adapters (TX TABC and CA ABC first)
+      • Stripe Issuing virtual cards for fee payment
+      • Form-hash crawler running daily across the portal fleet
+      • POA review with counsel before pilot submissions
+
+Footer (mono): "Design partners: open to 3-5 multi-location operators
+   for the TX/CA pilot — Q3 2026."
+
+------------------------------------------------------------------------
+SLIDE 9 — BUSINESS MODEL
+------------------------------------------------------------------------
+Title: Per-license, per-month — with a fee-pass-through.
+Body — three plans laid out as cards:
+   ESSENTIAL   $29 / location / month
+               Up to 10 licenses/location · email + dashboard.
+   GROWTH      $79 / location / month
+               Unlimited licenses · packet auto-prep · API + webhooks.
+   AUTO        $149 / location / month
+               Adds end-to-end agency filing on supported agencies.
+               Agency fees passed through at cost.
+Below the cards, one line:
+   Margin model: take rate on fee payments (~1.5%) once Issuing is live.
+Visual: three equal-width cards, hairline borders, prices in display
+   serif at 36px, plan names in mono caps.
+
+------------------------------------------------------------------------
+SLIDE 10 — COMPETITION & MOAT
+------------------------------------------------------------------------
+Title: Why this isn't another compliance calendar.
+Body — short table, two columns ("They give you", "ClearBot does"):
+   They give you            ClearBot does
+   ---------------------    -----------------------------------------
+   A reminder email         Opens the filing, attaches the packet,
+                            asks one human for approval.
+   A PDF template library   Field-mapped templates the worker actually
+                            fills with your data.
+   An audit log             Audit pack ZIP with every receipt + packet,
+                            signed URLs, retention dates.
+   "Concierge" support      Per-agency adapter code; per-row encrypted
+                            portal credentials; HMAC-signed webhooks.
+
+Below: "The moat is the per-agency adapter library. Every adapter we
+   ship is one another competitor has to build."
+Visual: simple two-column table, no icons.
+
+------------------------------------------------------------------------
+SLIDE 11 — TEAM
+------------------------------------------------------------------------
+Title: One founder, building toward a small operator-hire team.
+Body: founder bio (replace placeholder with real copy):
+   ETHAN GARDNER — founder, building solo.
+   Previously: [your real prior role / 1-line credibility hook].
+   Building ClearBot full-time since [date].
+Open roles below in mono caps:
+   FIRST HIRE   Senior fullstack — RPA + Playwright across agency
+                portals. Q3 2026.
+   SECOND HIRE  Operations lead — first 5 agencies, design-partner
+                onboarding. Q4 2026.
+Visual: large monogram "EG" inside a hairline circle, name + bio to the
+   right. No headshot unless one is provided.
+
+------------------------------------------------------------------------
+SLIDE 12 — THE ASK
+------------------------------------------------------------------------
+Title: Raising $1.5M seed.
+Body — three labeled blocks:
+   USE OF FUNDS     12 months: 2 hires (RPA, ops), 5 agency adapters
+                    end-to-end, Stripe Issuing live, 10 paying design
+                    partners.
+   MILESTONES       T+3mo: TX TABC live · T+6mo: CA ABC + IL LCC live
+                    · T+9mo: $20k MRR · T+12mo: $50k MRR.
+   CONTACT          ethan@clearbot.io · clearbot.io
+
+Visual: minimal — three centered blocks, hairline divider between each.
+   No chart, no logo wall, no closing image.
+
+------------------------------------------------------------------------
+END OF BRIEF
+------------------------------------------------------------------------
+Reminders for the designer:
+- Use real numbers from /dashboard for slide 5 if a screenshot is taken
+  from a populated workspace; use the existing brand palette in
+  tailwind.config.ts (ink/body/bgalt/accent/accent-deep/hairline) so
+  the deck matches the product visually.
+- The brief itself was generated by Claude Code; keep the language
+  monospace-tight, not marketing-fluffy. Strip any sentence that uses
+  "seamlessly", "AI-powered", or "next-gen".
+- All-caps mono labels are okay; ALL-CAPS body copy is not.
