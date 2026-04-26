@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
+import { enqueueJob } from "@/lib/jobs";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -61,6 +63,38 @@ export async function advanceFilingStage(filingId: string): Promise<Result> {
 
   revalidatePath("/dashboard/filings");
   revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+export async function regeneratePacket(filingId: string): Promise<Result> {
+  const ctx = await requireContext();
+  const supabase = createClient();
+  const { data: filing } = await supabase
+    .from("filings")
+    .select("id, short_id, workspace_id, stage")
+    .eq("id", filingId)
+    .eq("workspace_id", ctx.workspace.id)
+    .maybeSingle();
+  if (!filing) return { ok: false, error: "Filing not found." };
+  if (filing.stage === "done" || filing.stage === "rejected") {
+    return { ok: false, error: "Filing is no longer editable." };
+  }
+  const enq = await enqueueJob(
+    {
+      type: "generate_packet",
+      workspaceId: ctx.workspace.id,
+      payload: { filing_id: filing.id, filing_short_id: filing.short_id },
+    },
+    createAdminClient()
+  );
+  if (!enq) return { ok: false, error: "Could not enqueue packet job." };
+  await logActivity({
+    workspaceId: ctx.workspace.id,
+    type: "prepared",
+    title: `Packet regeneration queued · ${filing.short_id}`,
+    actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  revalidatePath("/dashboard/filings");
   return { ok: true };
 }
 

@@ -40,8 +40,30 @@ export default async function FilingsPage() {
       .eq("status", "active"),
   ]);
 
-  const inFlightRows: FilingRow[] = (inFlight ?? []) as unknown as FilingRow[];
+  const inFlightRowsRaw: FilingRow[] = (inFlight ?? []) as unknown as FilingRow[];
   const historyRows: FilingRow[] = (history ?? []) as unknown as FilingRow[];
+
+  // Attach packet documents (one per filing, kind='application') to in-flight rows.
+  const inflightIds = inFlightRowsRaw.map((r) => r.id);
+  let packetByFiling = new Map<string, { id: string; storage_path: string | null }>();
+  if (inflightIds.length > 0) {
+    const { data: packets } = await supabase
+      .from("documents")
+      .select("id, filing_id, storage_path")
+      .eq("workspace_id", ctx.workspace.id)
+      .eq("kind", "application")
+      .in("filing_id", inflightIds);
+    packetByFiling = new Map(
+      (packets ?? []).map((p) => [
+        p.filing_id as string,
+        { id: p.id as string, storage_path: (p.storage_path as string | null) ?? null },
+      ])
+    );
+  }
+  const inFlightRows: FilingRow[] = inFlightRowsRaw.map((r) => ({
+    ...r,
+    packet: packetByFiling.get(r.id) ?? null,
+  }));
   const licenses: LicenseOption[] = (licenseRows ?? []).map((l) => {
     const loc = l.locations as unknown as { name: string; city: string | null; state: string | null } | null;
     const locStr = loc ? ` · ${loc.name}${loc.city ? `, ${loc.city}` : ""}` : "";

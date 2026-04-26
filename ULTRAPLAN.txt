@@ -1,0 +1,117 @@
+ClearBot Automation — Ultraplan
+================================
+
+Current state (what works)
+--------------------------
+- Marketing site, auth, onboarding, workspaces, RBAC
+- Schema for licenses/filings/agencies/documents/integrations
+- Manual CRUD: add a license, manually mark a filing
+- ICS calendar export
+- nodemailer lib present but no scheduled sends
+
+The gap (what "does nothing" means)
+-----------------------------------
+- Nothing runs on a schedule
+- No emails ever leave the system
+- No filing is ever submitted to an agency
+- No fees are ever paid
+- No agency portals are ever scraped or watched
+
+
+Phase 0 — Plumbing (week 1)
+---------------------------
+Goal: a heartbeat exists.
+
+1. Worker host. Add a Node worker process (worker/ package) on Render or
+   Fly. Vercel Cron is fine for triggering, but long jobs need a separate
+   runtime. Playwright won't run in serverless.
+2. Job queue. Postgres-based queue (e.g. pg-boss, or a simple jobs table
+   you poll). Avoids Redis dependency.
+3. Service-role client. New lib/supabase/admin.ts using
+   SUPABASE_SERVICE_ROLE_KEY, bypassing RLS for cron jobs.
+4. Status endpoint at /api/health that reports last-run timestamps per
+   job.
+
+
+Phase 1 — Notifier (week 2)
+---------------------------
+Goal: one real automation in production.
+
+1. Daily sweep job — finds licenses where expires_at - lead_days <= today
+   and no filing is in_flight. Creates filing rows in stage='intake'.
+2. Email reminders — uses lib/email.ts + notification_prefs
+   (channel_email, lead_days, escalation_hours). Sent via
+   nodemailer/Resend.
+3. Activity log entries for every reminder.
+
+This alone justifies a paid product for many customers.
+
+
+Phase 2 — Prep mode (weeks 3–5)
+-------------------------------
+Goal: filing packets generated automatically.
+
+1. Form templates table — store one template per (agency_id,
+   license_type) with field mappings to locations + licenses columns.
+2. Packet generator — fills the template (PDF via pdf-lib or pdfkit),
+   writes to Supabase Storage, creates a documents row, advances filing
+   to stage='prep'.
+3. Review UI in dashboard — staff or customer approves, advances to
+   stage='review' then submit.
+
+
+Phase 3 — Auto filing (weeks 6+, the hard part)
+-----------------------------------------------
+Goal: filings actually submitted to agency portals.
+
+1. Per-agency adapter pattern — one file per agency under
+   worker/adapters/<agency-code>.ts exporting { submit(filing, doc) }.
+   APIs first (TTB has one; some states do), Playwright RPA second.
+2. Credentials vault — agency portal logins encrypted per workspace
+   (integrations.config already JSONB; add envelope encryption with a
+   KMS key).
+3. Pilot one agency end-to-end — recommend TX TABC or CA ABC since the
+   schema already seeds them. Build the full pipeline through one
+   agency before #2.
+4. Fee payment — Stripe ACH-debit the customer, then either:
+     (a) ACH-push to agency,
+     (b) virtual card via Stripe Issuing the bot uses on the portal, or
+     (c) wire from a pooled trust account.
+   Each has compliance implications — start with (b).
+5. Confirmation capture — adapter returns confirmation_number,
+   screenshot, receipt PDF; advance to stage='confirm' then 'done'.
+6. Per-agency rollout — realistic pace is 1–2 new agencies per
+   engineer-week once the pilot is solid.
+
+
+Phase 4 — Agency change watching
+--------------------------------
+Goal: detect when a portal/form/fee changes before customers' filings
+break.
+
+1. Form-hash crawler — daily fetch of each agency's form PDFs and
+   portal HTML; diff against a stored hash; insert agency_changes rows.
+2. Auto-revalidation — when a change is detected, mark all in-flight
+   filings for that agency as stage='review' for human re-check.
+
+
+Honest tradeoffs
+----------------
+- Phases 0–2 are tractable — 4–6 weeks for one solid engineer.
+- Phase 3 across 38 states is multi-year. The site copy ("38 states")
+  is aspirational; either narrow the marketing claim, or run the early
+  states with humans-in-the-loop while the RPA fleet grows. The DB
+  design supports that — automation_mode='auto' doesn't have to mean
+  "no human ever touches it."
+- Legal exposure — filing on behalf of someone may need a
+  Power-of-Attorney form per agency. Talk to a lawyer before pilot
+  launch.
+- Fee payment via virtual card is the lowest-friction option but some
+  agencies refuse cards or charge surcharges.
+
+
+Concrete first move
+-------------------
+Pick: build Phase 1 (Notifier) end-to-end this week. It turns the
+product from a CRUD app into something with a heartbeat, validates the
+worker setup, and produces emails customers will actually pay for.

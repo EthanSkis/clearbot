@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Pill } from "@/components/ui/Pill";
 import { useDialog } from "@/components/ui/Dialog";
-import { advanceFilingStage, manualFile, rejectFiling } from "./actions";
+import { advanceFilingStage, manualFile, rejectFiling, regeneratePacket } from "./actions";
+import { getSignedUrl } from "@/app/dashboard/documents/actions";
 
 type Stage = "intake" | "prep" | "review" | "submit" | "confirm" | "done" | "rejected";
 
@@ -32,6 +33,7 @@ export type FilingRow = {
   status: string;
   license: { id: string; license_type: string; location: { name: string; city: string | null; state: string | null } | null } | null;
   agency: { code: string } | null;
+  packet?: { id: string; storage_path: string | null } | null;
 };
 
 export type LicenseOption = {
@@ -117,7 +119,38 @@ export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
                   {f.mode}
                 </Pill>
               </div>
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {f.packet?.storage_path && (
+                  <button
+                    onClick={async () => {
+                      const r = await getSignedUrl(f.packet!.storage_path!);
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not open packet", body: r.error, tone: "danger" });
+                        return;
+                      }
+                      window.open(r.url, "_blank", "noopener,noreferrer");
+                    }}
+                    className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
+                  >
+                    View packet
+                  </button>
+                )}
+                {f.stage === "intake" && (f.mode === "prep" || f.mode === "auto") && !f.packet && (
+                  <button
+                    onClick={async () => {
+                      const r = await regeneratePacket(f.id);
+                      if (!r.ok) {
+                        await dialog.alert({ title: "Could not enqueue packet", body: r.error, tone: "danger" });
+                      } else {
+                        dialog.toast({ body: "Packet generation enqueued — refresh in a few seconds.", tone: "default" });
+                        refresh();
+                      }
+                    }}
+                    className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
+                  >
+                    Generate packet
+                  </button>
+                )}
                 {!isRejected && f.stage !== "done" && (
                   <button
                     onClick={async () => {
@@ -125,12 +158,15 @@ export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
                       if (!r.ok) {
                         await dialog.alert({ title: "Could not advance filing", body: r.error, tone: "danger" });
                       } else {
+                        if (f.stage === "prep") {
+                          dialog.toast({ body: "Packet approved · moved to review.", tone: "default" });
+                        }
                         refresh();
                       }
                     }}
                     className="rounded-md border border-accent bg-accent px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-white hover:bg-accent-deep"
                   >
-                    Advance
+                    {f.stage === "prep" ? "Approve" : "Advance"}
                   </button>
                 )}
                 {!isRejected && f.stage !== "done" && (

@@ -206,3 +206,96 @@ function escapeHtml(s: string) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+export type RenewalReminderPayload = {
+  to: string;
+  recipientName?: string | null;
+  workspaceName: string;
+  licenseType: string;
+  licenseNumber?: string | null;
+  locationName: string;
+  agencyName?: string | null;
+  expiresAt: string; // ISO date (YYYY-MM-DD)
+  daysUntilExpiry: number;
+  filingShortId: string;
+  kind: "intake_opened" | "escalation";
+};
+
+function appBaseUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://clearbot.io"
+  ).replace(/\/$/, "");
+}
+
+function formatExpiry(iso: string) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(d);
+}
+
+export async function sendRenewalReminder(p: RenewalReminderPayload) {
+  const transport = getTransport();
+  const from = process.env.SMTP_FROM || `ClearBot <${ORGANIZER_EMAIL}>`;
+  // No per-filing detail route yet; deep-link to the filings list.
+  const filingUrl = `${appBaseUrl()}/dashboard/filings`;
+  const expiry = formatExpiry(p.expiresAt);
+  const firstName = (p.recipientName || "").split(" ")[0] || "there";
+  const isEscalation = p.kind === "escalation";
+
+  const subject = isEscalation
+    ? `Still open: ${p.licenseType} renewal at ${p.locationName} (expires ${expiry})`
+    : `Renewal opened: ${p.licenseType} at ${p.locationName} (expires ${expiry})`;
+
+  const lead = isEscalation
+    ? `This is a follow-up — the renewal below hasn't been actioned yet.`
+    : `ClearBot opened a renewal for the license below. Review it before the deadline.`;
+
+  const lines = [
+    `License:    ${p.licenseType}${p.licenseNumber ? ` (#${p.licenseNumber})` : ""}`,
+    `Location:   ${p.locationName}`,
+    p.agencyName ? `Agency:     ${p.agencyName}` : null,
+    `Expires:    ${expiry} (${p.daysUntilExpiry} days)`,
+    `Filing:     ${p.filingShortId}`,
+  ].filter(Boolean) as string[];
+
+  const text = [
+    `Hi ${firstName},`,
+    "",
+    lead,
+    "",
+    ...lines,
+    "",
+    `Open the filing: ${filingUrl}`,
+    "",
+    `— ClearBot for ${p.workspaceName}`,
+  ].join("\n");
+
+  const html = `
+    <p>Hi ${escapeHtml(firstName)},</p>
+    <p>${escapeHtml(lead)}</p>
+    <table cellpadding="0" cellspacing="0" style="font-family:ui-sans-serif,system-ui,sans-serif;font-size:14px;line-height:1.6;border-collapse:collapse">
+      <tr><td style="padding:2px 12px 2px 0;color:#6b7280">License</td><td><strong>${escapeHtml(p.licenseType)}</strong>${p.licenseNumber ? ` <span style="color:#6b7280">#${escapeHtml(p.licenseNumber)}</span>` : ""}</td></tr>
+      <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Location</td><td>${escapeHtml(p.locationName)}</td></tr>
+      ${p.agencyName ? `<tr><td style="padding:2px 12px 2px 0;color:#6b7280">Agency</td><td>${escapeHtml(p.agencyName)}</td></tr>` : ""}
+      <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Expires</td><td>${escapeHtml(expiry)} <span style="color:#6b7280">(${p.daysUntilExpiry} days)</span></td></tr>
+      <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Filing</td><td>${escapeHtml(p.filingShortId)}</td></tr>
+    </table>
+    <p style="margin-top:20px"><a href="${filingUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px">Open filing</a></p>
+    <p style="color:#6b7280">— ClearBot for ${escapeHtml(p.workspaceName)}</p>
+  `;
+
+  await transport.sendMail({
+    from,
+    to: p.to,
+    subject,
+    text,
+    html,
+  });
+}
