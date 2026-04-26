@@ -78,9 +78,9 @@ export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; 
                 >
                   <div className="font-display text-[18px] font-light">{PLAN_TIER[p]}</div>
                   <div className="font-mono text-[11px] text-body">
-                    {p === "essential" && "$500/loc/mo · alerts only"}
-                    {p === "standard" && "$800/loc/mo · pre-filled packets"}
-                    {p === "professional" && "$1,200/loc/mo · auto-file + dedicated CSM"}
+                    {p === "essential" && "$500/loc/yr · alerts only"}
+                    {p === "standard" && "$800/loc/yr · pre-filled packets"}
+                    {p === "professional" && "$1,200/loc/yr · auto-file + dedicated CSM"}
                   </div>
                 </button>
               ))}

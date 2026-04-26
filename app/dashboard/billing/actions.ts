@@ -7,8 +7,10 @@ import { logActivity } from "@/lib/activity";
 
 type Result = { ok: true } | { ok: false; error: string };
 
-const PRICE_CENTS_PER_LOC: Record<string, number> = {
-  essential: 50000, // $500
+// Annual contract price per location, in cents. Marketing pricing page
+// is the source of truth: $500 / $800 / $1,200 per loc/yr.
+const ANNUAL_CENTS_PER_LOC: Record<string, number> = {
+  essential: 50000,
   standard: 80000,
   professional: 120000,
 };
@@ -47,8 +49,11 @@ export async function generateMonthlyInvoice(): Promise<Result> {
     .eq("workspace_id", ctx.workspace.id)
     .eq("status", "active");
 
-  const perLoc = PRICE_CENTS_PER_LOC[ctx.workspace.plan] ?? 50000;
-  const amount = (locations ?? 0) * perLoc;
+  // Monthly invoice = 1/12 of the annual contract for that month's
+  // active location count. (Annual cents come from ANNUAL_CENTS_PER_LOC.)
+  const annualPerLoc = ANNUAL_CENTS_PER_LOC[ctx.workspace.plan] ?? 50000;
+  const annualTotal = (locations ?? 0) * annualPerLoc;
+  const amount = Math.round(annualTotal / 12);
 
   const today = new Date();
   const periodStart = new Date(today.getFullYear(), today.getMonth(), 1);

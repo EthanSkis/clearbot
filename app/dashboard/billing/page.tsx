@@ -21,11 +21,11 @@ const PLAN_INCLUDED: Record<string, { locations: number; filings: number; storag
   professional: { locations: 40, filings: 200, storageGb: 100 },
 };
 
-const PLAN_PRICE_PER_LOC: Record<string, number> = {
-  essential: 500,
-  standard: 800,
-  professional: 1200,
-};
+// Single source of truth lives in PRICING_TIERS (price = annual dollars
+// per location). Marketing page = $500 / $800 / $1,200 per loc/yr.
+const PLAN_ANNUAL_PRICE_PER_LOC: Record<string, number> = Object.fromEntries(
+  PRICING_TIERS.map((t) => [t.tier.toLowerCase(), t.price])
+);
 
 export default async function BillingPage() {
   const ctx = await requireContext();
@@ -77,7 +77,11 @@ export default async function BillingPage() {
 
   const plan = ctx.workspace.plan;
   const limits = PLAN_INCLUDED[plan] ?? PLAN_INCLUDED.essential;
-  const monthlyCents = (locationCount ?? 0) * (PLAN_PRICE_PER_LOC[plan] ?? 500) * 100;
+  const annualCents = (locationCount ?? 0) * (PLAN_ANNUAL_PRICE_PER_LOC[plan] ?? 500) * 100;
+  // Monthly invoice = 1/12 of the annual contract. The marketing page
+  // also offers a no-commit monthly cycle at +15% — we don't surface
+  // that until the workspace stores a billing_cycle.
+  const monthlyCents = Math.round(annualCents / 12);
 
   const today = new Date();
   const nextInvoiceDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
@@ -92,13 +96,13 @@ export default async function BillingPage() {
   return (
     <>
       <PageHeader
-        eyebrow={`${plan.charAt(0).toUpperCase() + plan.slice(1)} plan · billed monthly`}
+        eyebrow={`${plan.charAt(0).toUpperCase() + plan.slice(1)} plan · per location, per year`}
         title={
           <>
             Your plan, <span className="italic">and the math behind it.</span>
           </>
         }
-        subtitle="Per-location pricing. Filings, fees, and storage included — no per-filing billing."
+        subtitle="Per-location annual pricing. Filings, fees, and storage included — no per-filing surcharges, cancel any time."
         actions={<PlanSwitcher currentPlan={plan} canManage={canManage} />}
       />
 
@@ -118,10 +122,13 @@ export default async function BillingPage() {
             </div>
             <div className="text-right">
               <div className="font-display text-[32px] font-light leading-tight text-ink tabular-nums">
-                ${(monthlyCents / 100).toLocaleString()}
+                ${(annualCents / 100).toLocaleString()}
               </div>
               <div className="mt-1 font-mono text-[11px] uppercase tracking-wider text-body">
-                per month at current usage
+                per year at current usage
+              </div>
+              <div className="mt-1 font-mono text-[11px] text-body">
+                ${(monthlyCents / 100).toLocaleString()}/month invoiced
               </div>
             </div>
           </div>
@@ -140,7 +147,8 @@ export default async function BillingPage() {
                 {nextInvoiceDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
               </span>
               <span className="font-mono text-[13px] tabular-nums text-ink">
-                ${(monthlyCents / 100).toLocaleString()}
+                ${(monthlyCents / 100).toLocaleString()}{" "}
+                <span className="text-body">· 1/12 of annual</span>
               </span>
             </div>
           </div>
@@ -176,10 +184,11 @@ export default async function BillingPage() {
       </section>
 
       <section>
-        <SectionHeader title="Compare plans" subtitle="Per-location, per-month. Filings & storage included." />
+        <SectionHeader title="Compare plans" subtitle="Per-location, per-year. Filings & storage included." />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {PRICING_TIERS.map((p) => {
             const isCurrent = p.tier.toLowerCase() === plan;
+            const monthly = Math.round((p.price / 12) * 1.15);
             return (
               <div
                 key={p.tier}
@@ -197,8 +206,13 @@ export default async function BillingPage() {
                   )}
                 </div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-display text-[32px] font-light text-ink tabular-nums">${p.price}</span>
-                  <span className="font-mono text-[11px] uppercase tracking-wider text-body">/loc/mo</span>
+                  <span className="font-display text-[32px] font-light text-ink tabular-nums">
+                    ${p.price.toLocaleString()}
+                  </span>
+                  <span className="font-mono text-[11px] uppercase tracking-wider text-body">/loc/yr</span>
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-body">
+                  or ${monthly}/loc/mo billed monthly
                 </div>
                 <p className="mt-2 text-[13px] leading-[1.55] text-body">{p.description}</p>
                 <ul className="mt-4 space-y-1.5">
@@ -214,6 +228,12 @@ export default async function BillingPage() {
               </div>
             );
           })}
+        </div>
+        <div className="mt-3 rounded-xl border border-hairline bg-bgalt px-5 py-4">
+          <div className="font-mono text-[11px] uppercase tracking-wider text-body">Enterprise</div>
+          <div className="mt-1 text-[13px] text-ink">
+            500+ locations, custom SLAs, dedicated infrastructure, BAA support.
+          </div>
         </div>
       </section>
 
