@@ -44,7 +44,7 @@ export async function replayDelivery(deliveryId: string): Promise<Result> {
   );
   if (!enq) return { ok: false, error: "Could not enqueue replay job." };
 
-  revalidatePath("/dashboard/integrations/deliveries");
+  revalidatePath("/dashboard/settings/deliveries");
   return { ok: true };
 }
 
@@ -58,6 +58,6 @@ export async function dropDelivery(deliveryId: string): Promise<Result> {
     .eq("id", deliveryId)
     .eq("workspace_id", ctx.workspace.id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/dashboard/integrations/deliveries");
+  revalidatePath("/dashboard/settings/deliveries");
   return { ok: true };
 }

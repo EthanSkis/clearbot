@@ -74,10 +74,10 @@ export default async function DeliveriesPage({
         subtitle="Per-delivery audit trail. Replay anything pending or failed; drop a delivery to stop retries."
         actions={
           <Link
-            href="/dashboard/integrations"
+            href="/dashboard/settings"
             className="rounded-full border border-hairline bg-white px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
           >
-            Back to integrations
+            Back to settings
           </Link>
         }
       />

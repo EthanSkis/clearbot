@@ -146,11 +146,11 @@ const PAGES: PageEntry[] = [
     keywords: ["users", "permissions", "members"],
   },
   {
-    href: "/dashboard/integrations",
-    title: "Integrations",
-    description: "Connect ClearBot to the rest of your stack.",
+    href: "/dashboard/settings/deliveries",
+    title: "Webhook deliveries",
+    description: "Per-delivery audit trail. Replay or drop pending deliveries.",
     section: "App",
-    keywords: ["api", "webhooks", "connect"],
+    keywords: ["api", "webhooks", "deliveries", "replay"],
   },
   {
     href: "/dashboard/billing",

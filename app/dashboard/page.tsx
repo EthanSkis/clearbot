@@ -6,7 +6,6 @@ import { RenewalCalendarServer, type CalendarEvent } from "@/components/dashboar
 import { ActivityFeedServer, type ActivityRow } from "@/components/dashboard/ActivityFeedServer";
 import { JurisdictionBreakdownServer, type JurisdictionRow } from "@/components/dashboard/JurisdictionBreakdownServer";
 import { TeamPanelServer, type TeamPanelMember } from "@/components/dashboard/TeamPanelServer";
-import { IntegrationsPanelServer, type IntegrationPanelRow } from "@/components/dashboard/IntegrationsPanelServer";
 import { AutomationModePanelServer } from "@/components/dashboard/AutomationModePanelServer";
 import { AgencyCoverageStripServer } from "@/components/dashboard/AgencyCoverageStripServer";
 import { FilingsInFlightServer } from "@/components/dashboard/FilingsInFlightServer";
@@ -38,8 +37,6 @@ const STATE_NAMES: Record<string, string> = {
 const FILING_SELECT =
   "id, short_id, stage, mode, fee_cents, filed_at, cycle_days_taken, confirmation_number, status, license:license_id(id, license_type, location:location_id(name, city, state)), agency:agency_id(code)";
 
-const CATALOG_TOTAL = 12; // size of the integrations catalog
-
 export default async function OverviewPage() {
   const ctx = await requireContext();
   const supabase = createClient();
@@ -55,7 +52,6 @@ export default async function OverviewPage() {
     { count: agencyCount },
     { data: activityRows },
     { data: workspaceMembers },
-    { data: integrationRows },
   ] = await Promise.all([
     supabase
       .from("locations")
@@ -94,10 +90,6 @@ export default async function OverviewPage() {
       )
       .eq("workspace_id", ctx.workspace.id)
       .eq("status", "active"),
-    supabase
-      .from("integrations")
-      .select("provider, category, status, last_synced_at")
-      .eq("workspace_id", ctx.workspace.id),
   ]);
 
   const licenses = licenseRows ?? [];
@@ -279,19 +271,6 @@ export default async function OverviewPage() {
     };
   });
 
-  // Integration panel
-  const livePanel: IntegrationPanelRow[] = (integrationRows ?? [])
-    .filter((i) => i.status !== "disconnected")
-    .slice(0, 6)
-    .map((i) => ({
-      name: i.provider as string,
-      category: i.category as string,
-      status: (i.status as IntegrationPanelRow["status"]) ?? "available",
-      detail: i.last_synced_at
-        ? `Last synced ${new Date(i.last_synced_at as string).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
-        : "Connected",
-    }));
-
   // Automation counts
   const automationCounts = {
     alert: licenses.filter((l) => l.automation_mode === "alert").length,
@@ -381,7 +360,7 @@ export default async function OverviewPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-3">
+      <section className="grid gap-6 lg:grid-cols-2">
         <AutomationModePanelServer defaultMode={defaultMode} counts={automationCounts} />
         <TeamPanelServer
           members={members}
@@ -391,7 +370,6 @@ export default async function OverviewPage() {
               : "SSO available · enable in Settings"
           }
         />
-        <IntegrationsPanelServer rows={livePanel} totalCatalog={CATALOG_TOTAL} />
       </section>
 
       <AgencyCoverageStripServer items={coverageItems} />

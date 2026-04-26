@@ -17,7 +17,6 @@ type IconName =
   | "folder"
   | "bank"
   | "users"
-  | "plug"
   | "card"
   | "gear"
   | "pulse";
@@ -35,7 +34,6 @@ export type BadgeCounts = {
   filings: number;
   documents: number;
   team: number;
-  integrations: number;
 };
 
 const NAV: NavItem[] = [
@@ -46,7 +44,6 @@ const NAV: NavItem[] = [
   { label: "Documents", href: "/dashboard/documents", icon: "folder" },
   { label: "Agencies", href: "/dashboard/agencies", icon: "bank" },
   { label: "Team", href: "/dashboard/team", icon: "users" },
-  { label: "Integrations", href: "/dashboard/integrations", icon: "plug" },
   { label: "Billing", href: "/dashboard/billing", icon: "card" },
   { label: "System", href: "/dashboard/system", icon: "pulse" },
   { label: "Settings", href: "/dashboard/settings", icon: "gear" },
@@ -782,15 +779,6 @@ function NavIcon({ name }: { name: IconName }) {
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
           <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      );
-    case "plug":
-      return (
-        <svg {...props}>
-          <path d="M12 22v-5" />
-          <path d="M9 8V2" />
-          <path d="M15 8V2" />
-          <path d="M18 8v4a6 6 0 0 1-12 0V8z" />
         </svg>
       );
     case "card":
