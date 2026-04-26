@@ -25,17 +25,31 @@ export type Renewal = {
   agency: { id: string; code: string; name: string } | null;
 };
 
-export type LocationOption = { id: string; label: string };
+export type LocationOption = { id: string; label: string; state: string | null };
 export type AgencyOption = { id: string; code: string; name: string };
+export type LicenseTypeOption = {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  jurisdiction_level: "federal" | "state" | "county" | "municipal";
+  state: string | null;
+  agency_id: string | null;
+  default_cycle_days: number;
+  default_fee_cents: number;
+  description: string | null;
+};
 
 export function RenewalsClient({
   rows,
   locations,
   agencies,
+  licenseTypes,
 }: {
   rows: Renewal[];
   locations: LocationOption[];
   agencies: AgencyOption[];
+  licenseTypes: LicenseTypeOption[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -253,6 +267,7 @@ export function RenewalsClient({
         <NewLicenseDrawer
           locations={locations}
           agencies={agencies}
+          licenseTypes={licenseTypes}
           onClose={() => setDrawerOpen(false)}
           onSaved={() => {
             setDrawerOpen(false);
@@ -286,15 +301,18 @@ function formatFee(cents: number) {
 function NewLicenseDrawer({
   locations,
   agencies,
+  licenseTypes,
   onClose,
   onSaved,
 }: {
   locations: LocationOption[];
   agencies: AgencyOption[];
+  licenseTypes: LicenseTypeOption[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [licenseType, setLicenseType] = useState("");
+  const [licenseTypeId, setLicenseTypeId] = useState<string | null>(null);
   const [licenseNumber, setLicenseNumber] = useState("");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [agencyId, setAgencyId] = useState("");
@@ -308,6 +326,52 @@ function NewLicenseDrawer({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const selectedLocation = locations.find((l) => l.id === locationId) ?? null;
+  const selectedState = selectedLocation?.state?.toUpperCase() ?? null;
+
+  // The catalog has ~55 entries today, so we filter on the client.
+  // Federal types apply everywhere; state/county/municipal types are
+  // shown only when they match the selected location's state.
+  const filteredTypes = useMemo(() => {
+    return licenseTypes.filter((t) => {
+      if (t.jurisdiction_level === "federal") return true;
+      if (!selectedState) return true;
+      return (t.state ?? "").toUpperCase() === selectedState;
+    });
+  }, [licenseTypes, selectedState]);
+
+  // When the user picks an entry that exactly matches a catalog name (or
+  // when the location changes and we can re-resolve the previously chosen
+  // type), pre-fill agency / cycle / fee from the catalog row.
+  useEffect(() => {
+    const match = filteredTypes.find(
+      (t) => t.name.toLowerCase() === licenseType.trim().toLowerCase()
+    );
+    if (!match) {
+      setLicenseTypeId(null);
+      return;
+    }
+    setLicenseTypeId(match.id);
+    if (match.agency_id) setAgencyId(match.agency_id);
+    setCycleDays(String(match.default_cycle_days));
+    setFeeUsd(String((match.default_fee_cents / 100).toFixed(2).replace(/\.00$/, "")));
+  }, [licenseType, filteredTypes]);
+
+  // Reset the typed catalog binding if the new location's state no longer
+  // contains the selected type.
+  useEffect(() => {
+    if (!licenseTypeId) return;
+    const stillVisible = filteredTypes.some((t) => t.id === licenseTypeId);
+    if (!stillVisible) {
+      setLicenseTypeId(null);
+      setLicenseType("");
+    }
+  }, [filteredTypes, licenseTypeId]);
+
+  const matchedType = licenseTypeId
+    ? licenseTypes.find((t) => t.id === licenseTypeId) ?? null
+    : null;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!locationId) {
@@ -319,6 +383,7 @@ function NewLicenseDrawer({
     const res = await createLicense({
       locationId,
       agencyId: agencyId || null,
+      licenseTypeId: licenseTypeId || null,
       licenseType,
       licenseNumber,
       expiresAt,
@@ -351,23 +416,6 @@ function NewLicenseDrawer({
         </header>
 
         <form id="license-form" onSubmit={onSubmit} className="flex-1 space-y-4 overflow-y-auto p-5">
-          <Field label="License type">
-            <input
-              required
-              value={licenseType}
-              onChange={(e) => setLicenseType(e.target.value)}
-              placeholder="Liquor License"
-              className="h-10 w-full rounded-md border border-hairline bg-white px-3 text-[13px] outline-none focus:border-accent"
-            />
-          </Field>
-          <Field label="License number (optional)">
-            <input
-              value={licenseNumber}
-              onChange={(e) => setLicenseNumber(e.target.value)}
-              placeholder="ABC-123456"
-              className="h-10 w-full rounded-md border border-hairline bg-white px-3 text-[13px] outline-none focus:border-accent"
-            />
-          </Field>
           <Field label="Location">
             <select
               required
@@ -383,7 +431,66 @@ function NewLicenseDrawer({
               ))}
             </select>
           </Field>
-          <Field label="Agency (optional)">
+
+          <Field
+            label={
+              selectedState
+                ? `License type · ${filteredTypes.length} canonical option${filteredTypes.length === 1 ? "" : "s"} for ${selectedState} + federal`
+                : `License type · ${filteredTypes.length} canonical options`
+            }
+          >
+            <input
+              required
+              value={licenseType}
+              onChange={(e) => setLicenseType(e.target.value)}
+              placeholder="Start typing — e.g. Mixed Beverage, Type 47, Food Service…"
+              list="license-type-catalog"
+              autoComplete="off"
+              className="h-10 w-full rounded-md border border-hairline bg-white px-3 text-[13px] outline-none focus:border-accent"
+            />
+            <datalist id="license-type-catalog">
+              {filteredTypes.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.code}
+                </option>
+              ))}
+            </datalist>
+            {matchedType && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-body">
+                <span className="rounded-sm bg-accent-soft px-1.5 py-0.5 text-accent-deep">
+                  Canonical · {matchedType.code}
+                </span>
+                <span>{matchedType.category.replace(/_/g, " ")}</span>
+                <span className="text-hairline">·</span>
+                <span>
+                  default cycle {matchedType.default_cycle_days}d · fee $
+                  {(matchedType.default_fee_cents / 100).toLocaleString()}
+                </span>
+              </div>
+            )}
+            {!matchedType && licenseType.trim().length > 0 && (
+              <div className="mt-1.5 font-mono text-[10px] uppercase tracking-wider text-body">
+                Free-text · agency won&apos;t auto-detect
+              </div>
+            )}
+          </Field>
+
+          <Field label="License number (optional)">
+            <input
+              value={licenseNumber}
+              onChange={(e) => setLicenseNumber(e.target.value)}
+              placeholder="ABC-123456"
+              className="h-10 w-full rounded-md border border-hairline bg-white px-3 text-[13px] outline-none focus:border-accent"
+            />
+          </Field>
+
+          <Field
+            label={
+              matchedType?.agency_id
+                ? "Agency · auto-detected (override below)"
+                : "Agency (optional)"
+            }
+          >
             <select
               value={agencyId}
               onChange={(e) => setAgencyId(e.target.value)}
@@ -397,6 +504,7 @@ function NewLicenseDrawer({
               ))}
             </select>
           </Field>
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Renewal due">
               <input

@@ -10,6 +10,7 @@ type Result<T = undefined> = ({ ok: true } & (T extends undefined ? object : T))
 export async function createLicense(input: {
   locationId: string;
   agencyId?: string | null;
+  licenseTypeId?: string | null;
   licenseType: string;
   licenseNumber?: string;
   expiresAt: string;
@@ -25,16 +26,37 @@ export async function createLicense(input: {
   if (!licenseType || !input.locationId || !input.expiresAt) {
     return { ok: false, error: "License type, location, and expiry are required." };
   }
+
+  // If the user picked from the canonical catalog, fall back to that row's
+  // agency / cycle / fee for any field they left blank — but always honor
+  // explicit overrides from the form.
+  let resolvedAgencyId = input.agencyId || null;
+  let resolvedCycleDays = input.cycleDays ?? 365;
+  let resolvedFeeCents = input.feeCents ?? 0;
+  if (input.licenseTypeId) {
+    const { data: catalogRow } = await supabase
+      .from("license_types")
+      .select("agency_id, default_cycle_days, default_fee_cents")
+      .eq("id", input.licenseTypeId)
+      .maybeSingle();
+    if (catalogRow) {
+      if (!resolvedAgencyId) resolvedAgencyId = (catalogRow.agency_id as string | null) ?? null;
+      if (input.cycleDays === undefined) resolvedCycleDays = catalogRow.default_cycle_days as number;
+      if (input.feeCents === undefined) resolvedFeeCents = catalogRow.default_fee_cents as number;
+    }
+  }
+
   const { error } = await supabase.from("licenses").insert({
     workspace_id: ctx.workspace.id,
     location_id: input.locationId,
-    agency_id: input.agencyId || null,
+    agency_id: resolvedAgencyId,
+    license_type_id: input.licenseTypeId || null,
     license_type: licenseType,
     license_number: input.licenseNumber?.trim() || null,
     issued_at: input.issuedAt || null,
     expires_at: input.expiresAt,
-    cycle_days: input.cycleDays ?? 365,
-    fee_cents: input.feeCents ?? 0,
+    cycle_days: resolvedCycleDays,
+    fee_cents: resolvedFeeCents,
     automation_mode: input.automationMode ?? "auto",
     notes: input.notes?.trim() || null,
     status: "active",

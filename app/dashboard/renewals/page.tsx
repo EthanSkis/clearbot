@@ -10,6 +10,7 @@ import {
   type Renewal,
   type LocationOption,
   type AgencyOption,
+  type LicenseTypeOption,
 } from "./RenewalsClient";
 
 export const metadata: Metadata = { title: "Renewals · ClearBot" };
@@ -19,7 +20,12 @@ export default async function RenewalsPage() {
   const ctx = await requireContext();
   const supabase = createClient();
 
-  const [{ data: licenseRows }, { data: locationRows }, { data: agencyRows }] = await Promise.all([
+  const [
+    { data: licenseRows },
+    { data: locationRows },
+    { data: agencyRows },
+    { data: licenseTypeRows },
+  ] = await Promise.all([
     supabase
       .from("licenses")
       .select(
@@ -34,6 +40,12 @@ export default async function RenewalsPage() {
       .eq("status", "active")
       .order("name", { ascending: true }),
     supabase.from("agencies").select("id,code,name").order("code", { ascending: true }),
+    supabase
+      .from("license_types")
+      .select(
+        "id, code, name, category, jurisdiction_level, state, agency_id, default_cycle_days, default_fee_cents, description"
+      )
+      .order("name", { ascending: true }),
   ]);
 
   const rows: Renewal[] = (licenseRows ?? []).map((r) => ({
@@ -51,8 +63,10 @@ export default async function RenewalsPage() {
   const locations: LocationOption[] = (locationRows ?? []).map((l) => ({
     id: l.id,
     label: `${l.name} · ${l.city ?? ""}, ${l.state ?? ""}`,
+    state: (l.state as string | null) ?? null,
   }));
   const agencies: AgencyOption[] = (agencyRows ?? []) as AgencyOption[];
+  const licenseTypes: LicenseTypeOption[] = (licenseTypeRows ?? []) as LicenseTypeOption[];
 
   // KPIs
   const today = new Date();
@@ -151,7 +165,12 @@ export default async function RenewalsPage() {
 
       <section>
         <SectionHeader title="Upcoming renewals" subtitle="Sorted by due date. Toggle Auto/Prep/Alert per-license." />
-        <RenewalsClient rows={rows} locations={locations} agencies={agencies} />
+        <RenewalsClient
+          rows={rows}
+          locations={locations}
+          agencies={agencies}
+          licenseTypes={licenseTypes}
+        />
       </section>
     </>
   );
