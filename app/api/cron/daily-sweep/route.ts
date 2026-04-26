@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendRenewalReminder } from "@/lib/email";
 import { enqueueJob } from "@/lib/jobs";
+import { fanoutWebhook } from "@/lib/webhooks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -312,6 +313,20 @@ async function sweepWorkspace(
         );
         if (enq) out.packets_enqueued += 1;
       }
+
+      await fanoutWebhook({
+        workspaceId,
+        event: "filing.opened",
+        payload: {
+          filing_id: insRow.id,
+          filing_short_id: shortId,
+          license_type: lic.license_type,
+          location: lic.location?.name ?? null,
+          agency: lic.agency?.name ?? null,
+          expires_at: lic.expires_at,
+        },
+        client: admin,
+      });
     }
   }
 

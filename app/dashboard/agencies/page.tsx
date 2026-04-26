@@ -187,9 +187,9 @@ export default async function AgenciesPage() {
           <KbCard
             title="Form templates"
             count={String((agencyCount ?? 0) * 4)}
-            body="Every current form version, diffed against history, ready to pre-fill."
-            href="/dashboard/filings"
-            cta="Open queue →"
+            body="Per-agency PDFs and field mappings the packet generator fills."
+            href="/dashboard/agencies/templates"
+            cta="Manage templates →"
           />
           <KbCard
             title="Fee schedules"

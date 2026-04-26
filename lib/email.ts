@@ -243,8 +243,7 @@ function formatExpiry(iso: string) {
 export async function sendRenewalReminder(p: RenewalReminderPayload) {
   const transport = getTransport();
   const from = process.env.SMTP_FROM || `ClearBot <${ORGANIZER_EMAIL}>`;
-  // No per-filing detail route yet; deep-link to the filings list.
-  const filingUrl = `${appBaseUrl()}/dashboard/filings`;
+  const filingUrl = `${appBaseUrl()}/dashboard/filings/${encodeURIComponent(p.filingShortId)}`;
   const expiry = formatExpiry(p.expiresAt);
   const firstName = (p.recipientName || "").split(" ")[0] || "there";
   const isEscalation = p.kind === "escalation";

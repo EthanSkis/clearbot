@@ -6,6 +6,7 @@ import { requireContext } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
 import { enqueueJob } from "@/lib/jobs";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fanoutWebhook, type WebhookEvent } from "@/lib/webhooks";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -40,6 +41,42 @@ export async function advanceFilingStage(filingId: string): Promise<Result> {
   }
   const { error } = await supabase.from("filings").update(patch).eq("id", filingId);
   if (error) return { ok: false, error: error.message };
+
+  // Fan out webhooks for the stage transition.
+  const webhookEvent: WebhookEvent | null =
+    nextStage === "review"
+      ? "filing.approved"
+      : nextStage === "submit"
+        ? "filing.submitted"
+        : nextStage === "confirm"
+          ? "filing.confirmed"
+          : null;
+  if (webhookEvent) {
+    await fanoutWebhook({
+      workspaceId: ctx.workspace.id,
+      event: webhookEvent,
+      payload: {
+        filing_id: filingId,
+        filing_short_id: row.short_id,
+        previous_stage: row.stage,
+        new_stage: nextStage,
+        confirmation_number: patch.confirmation_number ?? null,
+      },
+    });
+  }
+
+  // When advancing to "submit", enqueue the agency adapter to actually file.
+  if (nextStage === "submit") {
+    await enqueueJob(
+      {
+        type: "submit_filing",
+        workspaceId: ctx.workspace.id,
+        payload: { filing_id: filingId },
+        maxAttempts: 3,
+      },
+      createAdminClient()
+    );
+  }
 
   if (nextStage === "confirm" && row.license_id) {
     const license = row.license as unknown as { license_type: string; expires_at: string | null; cycle_days: number } | null;
@@ -101,6 +138,12 @@ export async function regeneratePacket(filingId: string): Promise<Result> {
 export async function rejectFiling(filingId: string, reason: string): Promise<Result> {
   const ctx = await requireContext();
   const supabase = createClient();
+  const { data: prior } = await supabase
+    .from("filings")
+    .select("short_id")
+    .eq("id", filingId)
+    .eq("workspace_id", ctx.workspace.id)
+    .maybeSingle();
   const { error } = await supabase
     .from("filings")
     .update({ stage: "rejected", status: "rejected", notes: reason })
@@ -110,9 +153,18 @@ export async function rejectFiling(filingId: string, reason: string): Promise<Re
   await logActivity({
     workspaceId: ctx.workspace.id,
     type: "alert",
-    title: `Filing ${filingId.slice(0, 8)} rejected`,
+    title: `Filing ${prior?.short_id ?? filingId.slice(0, 8)} rejected`,
     detail: reason,
     actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  await fanoutWebhook({
+    workspaceId: ctx.workspace.id,
+    event: "filing.rejected",
+    payload: {
+      filing_id: filingId,
+      filing_short_id: prior?.short_id ?? null,
+      reason,
+    },
   });
   revalidatePath("/dashboard/filings");
   return { ok: true };

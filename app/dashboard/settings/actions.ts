@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { canAdmin, requireContext } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
+import { newApiKey } from "@/lib/crypto";
+import { randomBytes } from "crypto";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -101,6 +103,48 @@ export async function updateNotificationSettings(input: {
   settings.escalation_hours = input.escalationHours;
   const { error } = await supabase.from("workspaces").update({ settings }).eq("id", ctx.workspace.id);
   if (error) return { ok: false, error: error.message };
+
+  // Mirror the current user's choice into the per-member notification_prefs
+  // table that the daily cron actually reads from.
+  const role = ctx.membership.role;
+  const channelEmail =
+    role === "owner"
+      ? input.ownerEmail
+      : role === "finance"
+        ? input.financeEmail
+        : input.managerEmail;
+  const channelSms = role === "owner" ? input.ownerSms : role === "finance" ? false : input.managerSms;
+  const channelSlack =
+    role === "owner" ? input.ownerSlack : role === "finance" ? input.financeSlack : input.managerSlack;
+  const { data: existingPref } = await supabase
+    .from("notification_prefs")
+    .select("id")
+    .eq("workspace_id", ctx.workspace.id)
+    .eq("member_id", ctx.membership.id)
+    .maybeSingle();
+  if (existingPref) {
+    await supabase
+      .from("notification_prefs")
+      .update({
+        channel_email: channelEmail,
+        channel_sms: channelSms,
+        channel_slack: channelSlack,
+        lead_days: input.leadDays,
+        escalation_hours: input.escalationHours,
+      })
+      .eq("id", existingPref.id);
+  } else {
+    await supabase.from("notification_prefs").insert({
+      workspace_id: ctx.workspace.id,
+      member_id: ctx.membership.id,
+      channel_email: channelEmail,
+      channel_sms: channelSms,
+      channel_slack: channelSlack,
+      lead_days: input.leadDays,
+      escalation_hours: input.escalationHours,
+    });
+  }
+
   revalidatePath("/dashboard/settings");
   return { ok: true };
 }
@@ -218,6 +262,140 @@ export async function cancelSubscription(): Promise<Result> {
     actorLabel: ctx.user.fullName ?? ctx.user.email,
   });
   revalidatePath("/dashboard/settings");
+  return { ok: true };
+}
+
+export async function listApiKeys() {
+  const ctx = await requireContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("api_keys")
+    .select("id, name, key_prefix, scope, created_at, last_used_at, revoked_at")
+    .eq("workspace_id", ctx.workspace.id)
+    .order("created_at", { ascending: false });
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const, items: data ?? [] };
+}
+
+export async function createApiKey(input: {
+  name: string;
+  scope: "read" | "read_write";
+}): Promise<{ ok: true; key: string; prefix: string } | { ok: false; error: string }> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+  const supabase = createClient();
+  let made;
+  try {
+    made = newApiKey();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "key gen failed" };
+  }
+  const { error } = await supabase.from("api_keys").insert({
+    workspace_id: ctx.workspace.id,
+    name: input.name.trim() || "Untitled key",
+    key_prefix: made.prefix,
+    key_hash: made.hash,
+    scope: input.scope,
+    created_by: ctx.user.id,
+  });
+  if (error) return { ok: false, error: error.message };
+  await logActivity({
+    workspaceId: ctx.workspace.id,
+    type: "setting",
+    title: `API key issued · ${input.name}`,
+    detail: `${input.scope} scope`,
+    actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  return { ok: true, key: made.plaintext, prefix: made.prefix };
+}
+
+export async function revokeApiKey(id: string): Promise<Result> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("api_keys")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("workspace_id", ctx.workspace.id);
+  if (error) return { ok: false, error: error.message };
+  await logActivity({
+    workspaceId: ctx.workspace.id,
+    type: "setting",
+    title: "API key revoked",
+    actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  return { ok: true };
+}
+
+export async function listWebhooks() {
+  await requireContext();
+  const ctx = await requireContext();
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("webhooks")
+    .select("id, url, event, signing_secret, active, last_fired_at, last_status, created_at")
+    .eq("workspace_id", ctx.workspace.id)
+    .order("created_at", { ascending: false });
+  if (error) return { ok: false as const, error: error.message };
+  return { ok: true as const, items: data ?? [] };
+}
+
+export async function createWebhook(input: { url: string; event: string }): Promise<Result> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+  let target: URL;
+  try {
+    target = new URL(input.url);
+  } catch {
+    return { ok: false, error: "URL must be absolute (https://…)" };
+  }
+  if (target.protocol !== "https:" && target.protocol !== "http:") {
+    return { ok: false, error: "URL must be http or https" };
+  }
+  const signingSecret = `whsec_${randomBytes(24).toString("base64url")}`;
+  const supabase = createClient();
+  const { error } = await supabase.from("webhooks").insert({
+    workspace_id: ctx.workspace.id,
+    url: input.url.trim(),
+    event: input.event.trim() || "filing.confirmed",
+    signing_secret: signingSecret,
+    active: true,
+  });
+  if (error) return { ok: false, error: error.message };
+  await logActivity({
+    workspaceId: ctx.workspace.id,
+    type: "setting",
+    title: `Webhook added · ${input.event}`,
+    detail: input.url,
+    actorLabel: ctx.user.fullName ?? ctx.user.email,
+  });
+  return { ok: true };
+}
+
+export async function toggleWebhook(id: string, active: boolean): Promise<Result> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("webhooks")
+    .update({ active })
+    .eq("id", id)
+    .eq("workspace_id", ctx.workspace.id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function deleteWebhook(id: string): Promise<Result> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("webhooks")
+    .delete()
+    .eq("id", id)
+    .eq("workspace_id", ctx.workspace.id);
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

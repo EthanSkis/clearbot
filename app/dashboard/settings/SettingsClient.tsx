@@ -6,8 +6,15 @@ import clsx from "clsx";
 import { useDialog } from "@/components/ui/Dialog";
 import {
   cancelSubscription,
+  createApiKey,
+  createWebhook,
+  deleteWebhook,
   deleteWorkspace,
   exportWorkspace,
+  listApiKeys,
+  listWebhooks,
+  revokeApiKey,
+  toggleWebhook,
   transferOwnership,
   updateAutomationSettings,
   updateGeneralSettings,
@@ -380,16 +387,285 @@ function AutomationSection({
 
 function DeveloperSection() {
   return (
-    <Card title="Developer" subtitle="API keys live on the Integrations page.">
-      <FormRow label="API surface">
-        <span className="text-[13px] text-body">REST + GraphQL · OAuth-protected · cursor-paginated.</span>
-      </FormRow>
-      <FormRow label="Rate limit">
-        <span className="font-mono text-[12px] text-ink">10,000 req / min per key</span>
-      </FormRow>
-      <FormRow label="Webhook signing">
-        <span className="font-mono text-[12px] text-ink">{"HMAC SHA-256 of `{signing_secret}.{body}`"}</span>
-      </FormRow>
+    <div className="space-y-4">
+      <Card title="API surface" subtitle="Programmatic access to your workspace.">
+        <FormRow label="Base URL">
+          <span className="font-mono text-[12px] text-ink">https://clearbot.io/api/v1</span>
+        </FormRow>
+        <FormRow label="Auth header">
+          <span className="font-mono text-[12px] text-ink">x-api-key: cb_…</span>
+        </FormRow>
+        <FormRow label="Endpoints">
+          <span className="font-mono text-[11px] text-body">
+            GET /filings · GET /licenses · POST /filings/{`{id}`}/advance
+          </span>
+        </FormRow>
+        <FormRow label="Webhook signing">
+          <span className="font-mono text-[12px] text-ink">x-clearbot-signature: sha256=&lt;HMAC&gt;</span>
+        </FormRow>
+      </Card>
+      <ApiKeysCard />
+      <WebhooksCard />
+    </div>
+  );
+}
+
+type ApiKeyRow = {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scope: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+function ApiKeysCard() {
+  const dialog = useDialog();
+  const [rows, setRows] = useState<ApiKeyRow[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [scope, setScope] = useState<"read" | "read_write">("read_write");
+  const [reveal, setReveal] = useState<string | null>(null);
+
+  async function refresh() {
+    const r = await listApiKeys();
+    if (r.ok) setRows(r.items as ApiKeyRow[]);
+    setLoaded(true);
+  }
+
+  if (!loaded) {
+    void refresh();
+  }
+
+  return (
+    <Card title="API keys" subtitle="Issue keys for the public REST API. Each key is shown once.">
+      <ul className="divide-y divide-hairline">
+        {(rows ?? []).length === 0 && (
+          <li className="px-1 py-3 text-[12px] text-body">No keys yet.</li>
+        )}
+        {(rows ?? []).map((k) => (
+          <li key={k.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2 text-[12px]">
+            <div>
+              <div className="text-[13px] text-ink">{k.name}</div>
+              <div className="font-mono text-[11px] text-body">{k.key_prefix}…</div>
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-wider text-body">{k.scope}</div>
+            <div className="font-mono text-[11px] text-body">
+              {k.revoked_at ? "revoked" : k.last_used_at ? `used ${k.last_used_at.slice(0, 10)}` : "unused"}
+            </div>
+            {!k.revoked_at && (
+              <button
+                onClick={async () => {
+                  const ok = await dialog.confirm({
+                    title: "Revoke this key?",
+                    body: "Calls authenticating with this key will start failing immediately.",
+                    tone: "danger",
+                    confirmLabel: "Revoke",
+                  });
+                  if (!ok) return;
+                  const r = await revokeApiKey(k.id);
+                  if (!r.ok) await dialog.alert({ title: "Revoke failed", body: r.error, tone: "danger" });
+                  else {
+                    dialog.toast({ body: "Key revoked." });
+                    void refresh();
+                  }
+                }}
+                className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-bad"
+              >
+                Revoke
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {reveal && (
+        <div className="mt-3 rounded-md border border-warn/30 bg-warn/5 px-3 py-2">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-warn">Save this key now — won't be shown again</div>
+          <div className="mt-1 break-all font-mono text-[12px] text-ink">{reveal}</div>
+        </div>
+      )}
+      {creating ? (
+        <div className="mt-3 grid gap-2 rounded-md border border-hairline bg-bgalt/30 p-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Key name (e.g. CI ingestion)"
+            className="h-9 rounded-md border border-hairline bg-white px-2 text-[12px]"
+          />
+          <div className="flex items-center gap-2">
+            <Select
+              value={scope}
+              onChange={(v) => setScope(v as "read" | "read_write")}
+              options={["read", "read_write"]}
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                const r = await createApiKey({ name, scope });
+                if (!r.ok) await dialog.alert({ title: "Create failed", body: r.error, tone: "danger" });
+                else {
+                  setReveal(r.key);
+                  setCreating(false);
+                  setName("");
+                  void refresh();
+                }
+              }}
+              className="rounded-md border border-accent bg-accent px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-white hover:bg-accent-deep"
+            >
+              Issue key
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreating(false)}
+              className="rounded-md border border-hairline bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setCreating(true);
+            setReveal(null);
+          }}
+          className="mt-3 rounded-md border border-hairline bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+        >
+          + New API key
+        </button>
+      )}
+    </Card>
+  );
+}
+
+type WebhookRow = {
+  id: string;
+  url: string;
+  event: string;
+  signing_secret: string;
+  active: boolean;
+  last_fired_at: string | null;
+  last_status: string | null;
+  created_at: string;
+};
+
+function WebhooksCard() {
+  const dialog = useDialog();
+  const [rows, setRows] = useState<WebhookRow[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [url, setUrl] = useState("");
+  const [event, setEvent] = useState("filing.confirmed");
+
+  async function refresh() {
+    const r = await listWebhooks();
+    if (r.ok) setRows(r.items as WebhookRow[]);
+    setLoaded(true);
+  }
+  if (!loaded) void refresh();
+
+  return (
+    <Card title="Webhooks" subtitle="Outbound HTTPS POSTs when filings change state.">
+      <ul className="divide-y divide-hairline">
+        {(rows ?? []).length === 0 && <li className="py-3 text-[12px] text-body">No webhooks yet.</li>}
+        {(rows ?? []).map((w) => (
+          <li key={w.id} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2 text-[12px]">
+            <div className="min-w-0">
+              <div className="truncate font-mono text-[12px] text-ink">{w.url}</div>
+              <div className="font-mono text-[10px] text-body">
+                {w.event} · {w.last_status ? `last ${w.last_status}` : "no calls yet"}
+              </div>
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-wider">{w.active ? "active" : "paused"}</div>
+            <button
+              onClick={async () => {
+                const r = await toggleWebhook(w.id, !w.active);
+                if (!r.ok) await dialog.alert({ title: "Toggle failed", body: r.error, tone: "danger" });
+                else void refresh();
+              }}
+              className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              {w.active ? "Pause" : "Resume"}
+            </button>
+            <button
+              onClick={async () => {
+                const ok = await dialog.confirm({
+                  title: "Delete webhook?",
+                  body: w.url,
+                  tone: "danger",
+                  confirmLabel: "Delete",
+                });
+                if (!ok) return;
+                const r = await deleteWebhook(w.id);
+                if (!r.ok) await dialog.alert({ title: "Delete failed", body: r.error, tone: "danger" });
+                else {
+                  dialog.toast({ body: "Webhook deleted." });
+                  void refresh();
+                }
+              }}
+              className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-bad"
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+      {creating ? (
+        <div className="mt-3 grid gap-2 rounded-md border border-hairline bg-bgalt/30 p-3">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://your-app.example.com/webhooks/clearbot"
+            className="h-9 rounded-md border border-hairline bg-white px-2 text-[12px]"
+          />
+          <Select
+            value={event}
+            onChange={setEvent}
+            options={[
+              "filing.opened",
+              "filing.packet_ready",
+              "filing.approved",
+              "filing.submitted",
+              "filing.confirmed",
+              "filing.rejected",
+              "license.state_changed",
+            ]}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const r = await createWebhook({ url, event });
+                if (!r.ok) await dialog.alert({ title: "Create failed", body: r.error, tone: "danger" });
+                else {
+                  setUrl("");
+                  setCreating(false);
+                  dialog.toast({ body: "Webhook saved." });
+                  void refresh();
+                }
+              }}
+              className="rounded-md border border-accent bg-accent px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-white hover:bg-accent-deep"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setCreating(false)}
+              className="rounded-md border border-hairline bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setCreating(true)}
+          className="mt-3 rounded-md border border-hairline bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
+        >
+          + Add webhook
+        </button>
+      )}
     </Card>
   );
 }

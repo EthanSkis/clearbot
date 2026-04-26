@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { Pill } from "@/components/ui/Pill";
@@ -77,11 +78,14 @@ export function FilingsInFlightLive({ rows }: { rows: FilingRow[] }) {
               className="grid grid-cols-[1fr_auto] items-center gap-3 px-5 py-4 md:grid-cols-[1.2fr_1fr_2fr_0.7fr_0.6fr_0.7fr]"
             >
               <div className="min-w-0">
-                <div className="truncate text-[14px] font-medium text-ink">
+                <Link
+                  href={`/dashboard/filings/${encodeURIComponent(f.short_id)}`}
+                  className="truncate text-[14px] font-medium text-ink hover:underline"
+                >
                   {f.license?.license_type ?? "Untracked"}
-                </div>
+                </Link>
                 <div className="truncate font-mono text-[11px] text-body">
-                  {f.license?.location ? `${f.license.location.name} · ${f.license.location.city}, ${f.license.location.state}` : "—"}
+                  {f.short_id} · {f.license?.location ? `${f.license.location.name} · ${f.license.location.city}, ${f.license.location.state}` : "—"}
                 </div>
               </div>
               <div className="hidden font-mono text-[12px] text-body md:block">

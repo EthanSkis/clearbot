@@ -2,7 +2,11 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type JobType = "generate_packet" | "form_hash_check";
+export type JobType =
+  | "generate_packet"
+  | "form_hash_check"
+  | "submit_filing"
+  | "deliver_webhook";
 
 export type JobRow = {
   id: string;

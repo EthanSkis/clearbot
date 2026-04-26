@@ -136,6 +136,43 @@ export async function generatePacket(
     metadata: { filing_short_id: c.filing.short_id, document_id: documentId, used_template: usedTemplate },
   });
 
+  // Fan out filing.packet_ready webhook (best-effort, inline so the worker
+  // doesn't depend on a Next-side helper).
+  try {
+    const { data: hooks } = await admin
+      .from("webhooks")
+      .select("id")
+      .eq("workspace_id", c.workspace.id)
+      .eq("active", true);
+    for (const h of hooks ?? []) {
+      const { data: delivery } = await admin
+        .from("webhook_deliveries")
+        .insert({
+          workspace_id: c.workspace.id,
+          webhook_id: h.id,
+          event: "filing.packet_ready",
+          payload: {
+            filing_id: c.filing.id,
+            filing_short_id: c.filing.short_id,
+            document_id: documentId,
+            bytes: pdfBytes.byteLength,
+            used_template: usedTemplate,
+          },
+        })
+        .select("id")
+        .single();
+      if (delivery) {
+        await admin.from("jobs").insert({
+          type: "deliver_webhook",
+          workspace_id: c.workspace.id,
+          payload: { delivery_id: delivery.id },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[packet] webhook fanout (non-fatal):", e);
+  }
+
   return { ok: true, documentId, storagePath, bytes: pdfBytes.byteLength, usedTemplate };
 }
 
