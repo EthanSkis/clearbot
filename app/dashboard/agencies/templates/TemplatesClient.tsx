@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useDialog } from "@/components/ui/Dialog";
-import { attachTemplatePdf, deleteTemplate, getTemplatePdfUrl, upsertTemplate } from "./actions";
+import { commitTemplatePdf, createTemplateUploadUrl, deleteTemplate, getTemplatePdfUrl, upsertTemplate } from "./actions";
+import { createClient } from "@/lib/supabase/client";
 
 export type AgencyOption = { id: string; code: string; name: string };
 export type TemplateRow = {
@@ -290,15 +291,35 @@ function TemplateEditor({
                       await dialog.alert({ title: "Pick a file first" });
                       return;
                     }
-                    const base64 = await fileToBase64(f);
-                    const r = await attachTemplatePdf({
+                    // 1. Ask the server for a signed upload URL.
+                    const signed = await createTemplateUploadUrl({
                       templateId: savedId,
                       fileName: f.name,
-                      base64,
-                      contentType: f.type || "application/pdf",
                     });
-                    if (!r.ok) {
-                      await dialog.alert({ title: "Upload failed", body: r.error, tone: "danger" });
+                    if (!signed.ok) {
+                      await dialog.alert({ title: "Could not start upload", body: signed.error, tone: "danger" });
+                      return;
+                    }
+                    // 2. Upload the file directly to Supabase Storage with the
+                    //    one-time token. Avoids the 1MB Server Action limit.
+                    const supabase = createClient();
+                    const up = await supabase.storage
+                      .from("form-templates")
+                      .uploadToSignedUrl(signed.storagePath, signed.token, f, {
+                        contentType: f.type || "application/pdf",
+                        upsert: true,
+                      });
+                    if (up.error) {
+                      await dialog.alert({ title: "Upload failed", body: up.error.message, tone: "danger" });
+                      return;
+                    }
+                    // 3. Commit the storage path to the template row.
+                    const commit = await commitTemplatePdf({
+                      templateId: savedId,
+                      storagePath: signed.storagePath,
+                    });
+                    if (!commit.ok) {
+                      await dialog.alert({ title: "Could not attach PDF", body: commit.error, tone: "danger" });
                     } else {
                       dialog.toast({ body: "PDF attached." });
                     }
@@ -340,19 +361,6 @@ function TemplateEditor({
       </div>
     </div>
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onload = () => {
-      const result = String(reader.result ?? "");
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.readAsDataURL(file);
-  });
 }
 
 function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {

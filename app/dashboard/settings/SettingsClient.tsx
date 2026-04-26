@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useDialog } from "@/components/ui/Dialog";
@@ -435,8 +435,17 @@ function ApiKeysCard() {
     setLoaded(true);
   }
 
-  if (!loaded) {
+  useEffect(() => {
     void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!loaded) {
+    return (
+      <Card title="API keys" subtitle="Issue keys for the public REST API. Each key is shown once.">
+        <div className="py-3 font-mono text-[11px] text-body">Loading…</div>
+      </Card>
+    );
   }
 
   return (
@@ -565,7 +574,17 @@ function WebhooksCard() {
     if (r.ok) setRows(r.items as WebhookRow[]);
     setLoaded(true);
   }
-  if (!loaded) void refresh();
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!loaded) {
+    return (
+      <Card title="Webhooks" subtitle="Outbound HTTPS POSTs when filings change state.">
+        <div className="py-3 font-mono text-[11px] text-body">Loading…</div>
+      </Card>
+    );
+  }
 
   return (
     <Card title="Webhooks" subtitle="Outbound HTTPS POSTs when filings change state.">

@@ -66,12 +66,13 @@ export async function upsertTemplate(input: {
   return { ok: true, id: data.id as string };
 }
 
-export async function attachTemplatePdf(input: {
+export async function createTemplateUploadUrl(input: {
   templateId: string;
   fileName: string;
-  base64: string;
-  contentType: string;
-}): Promise<Result> {
+}): Promise<
+  | { ok: true; storagePath: string; token: string }
+  | { ok: false; error: string }
+> {
   const ctx = await requireContext();
   if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
 
@@ -85,16 +86,29 @@ export async function attachTemplatePdf(input: {
 
   const safeName = input.fileName.replace(/[^a-z0-9_.-]+/gi, "_");
   const storagePath = `${tpl.agency_id}/${tpl.license_type.replace(/\s+/g, "_")}-${tpl.version}-${Date.now()}-${safeName}`;
-  const buf = Buffer.from(input.base64, "base64");
-  const upload = await admin.storage.from("form-templates").upload(storagePath, buf, {
-    contentType: input.contentType || "application/pdf",
-    upsert: true,
-  });
-  if (upload.error) return { ok: false, error: upload.error.message };
+  const { data, error } = await admin.storage
+    .from("form-templates")
+    .createSignedUploadUrl(storagePath);
+  if (error || !data) return { ok: false, error: error?.message ?? "could not sign upload URL" };
+  return { ok: true, storagePath, token: data.token };
+}
+
+export async function commitTemplatePdf(input: {
+  templateId: string;
+  storagePath: string;
+}): Promise<Result> {
+  const ctx = await requireContext();
+  if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Admins only." };
+
+  const admin = createAdminClient();
+  const { data: head } = await admin.storage
+    .from("form-templates")
+    .createSignedUrl(input.storagePath, 5);
+  if (!head?.signedUrl) return { ok: false, error: "Upload not visible in storage yet." };
 
   const { error } = await admin
     .from("form_templates")
-    .update({ pdf_storage_path: storagePath })
+    .update({ pdf_storage_path: input.storagePath })
     .eq("id", input.templateId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/agencies/templates");

@@ -329,7 +329,6 @@ export async function revokeApiKey(id: string): Promise<Result> {
 }
 
 export async function listWebhooks() {
-  await requireContext();
   const ctx = await requireContext();
   const supabase = createClient();
   const { data, error } = await supabase

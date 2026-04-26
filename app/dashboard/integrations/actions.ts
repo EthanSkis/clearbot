@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createHash, randomBytes } from "crypto";
+import { createHmac, randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { canAdmin, requireContext } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
+import { newApiKey } from "@/lib/crypto";
 
 type Result<T = undefined> = ({ ok: true } & (T extends undefined ? object : T)) | { ok: false; error: string };
 
@@ -139,16 +140,15 @@ export async function fireTestWebhook(webhookId: string): Promise<Result> {
     sample: true,
   };
   const body = JSON.stringify(payload);
-  const signature = createHash("sha256")
-    .update(`${hook.signing_secret}.${body}`)
-    .digest("hex");
+  const signature = createHmac("sha256", hook.signing_secret as string).update(body).digest("hex");
   let status = "200 OK";
   try {
     const res = await fetch(hook.url as string, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-clearbot-signature": signature,
+        "x-clearbot-event": hook.event as string,
+        "x-clearbot-signature": `sha256=${signature}`,
       },
       body,
       cache: "no-store",
@@ -172,14 +172,17 @@ export async function generateApiKey(input: { name: string; scope: "read" | "rea
   if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Only owners and admins can mint keys." };
   const supabase = createClient();
   const name = input.name.trim() || "API key";
-  const raw = `cb_${input.scope === "read" ? "live" : "live"}_${randomBytes(20).toString("hex")}`;
-  const prefix = `${raw.slice(0, 12)}…${raw.slice(-3)}`;
-  const hash = createHash("sha256").update(raw).digest("hex");
+  let made;
+  try {
+    made = newApiKey();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "key gen failed" };
+  }
   const { error } = await supabase.from("api_keys").insert({
     workspace_id: ctx.workspace.id,
     name,
-    key_prefix: prefix,
-    key_hash: hash,
+    key_prefix: made.prefix,
+    key_hash: made.hash,
     scope: input.scope,
     created_by: ctx.user.id,
   });
@@ -191,24 +194,27 @@ export async function generateApiKey(input: { name: string; scope: "read" | "rea
     actorLabel: ctx.user.fullName ?? ctx.user.email,
   });
   revalidatePath("/dashboard/integrations");
-  return { ok: true, secret: raw };
+  return { ok: true, secret: made.plaintext };
 }
 
 export async function rotateApiKey(keyId: string): Promise<{ ok: true; secret: string } | { ok: false; error: string }> {
   const ctx = await requireContext();
   if (!canAdmin(ctx.membership.role)) return { ok: false, error: "Only owners and admins can rotate keys." };
   const supabase = createClient();
-  const raw = `cb_live_${randomBytes(20).toString("hex")}`;
-  const prefix = `${raw.slice(0, 12)}…${raw.slice(-3)}`;
-  const hash = createHash("sha256").update(raw).digest("hex");
+  let made;
+  try {
+    made = newApiKey();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "key gen failed" };
+  }
   const { error } = await supabase
     .from("api_keys")
-    .update({ key_prefix: prefix, key_hash: hash, last_used_at: null })
+    .update({ key_prefix: made.prefix, key_hash: made.hash, last_used_at: null })
     .eq("id", keyId)
     .eq("workspace_id", ctx.workspace.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/integrations");
-  return { ok: true, secret: raw };
+  return { ok: true, secret: made.plaintext };
 }
 
 export async function revokeApiKey(keyId: string): Promise<Result> {

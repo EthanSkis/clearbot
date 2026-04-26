@@ -6,6 +6,7 @@ import { Pill } from "@/components/ui/Pill";
 import { requireContext } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { FilingActionsClient } from "./FilingActionsClient";
+import { OpenDocumentButton } from "./OpenDocumentButton";
 
 export const metadata: Metadata = { title: "Filing · ClearBot" };
 export const dynamic = "force-dynamic";
@@ -176,12 +177,7 @@ export default async function FilingDetailPage({ params }: { params: { shortId: 
                   <div className="font-mono text-[11px] text-body">
                     {(d.created_at as string).slice(0, 10)}
                   </div>
-                  <Link
-                    href={`/dashboard/documents`}
-                    className="rounded-md border border-hairline bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-body hover:text-ink"
-                  >
-                    Open
-                  </Link>
+                  <OpenDocumentButton storagePath={(d.storage_path as string | null) ?? null} />
                 </li>
               ))}
             </ul>
