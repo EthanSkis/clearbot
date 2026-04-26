@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { requireContext } from "@/lib/workspace";
 import { logActivity } from "@/lib/activity";
 
@@ -15,6 +16,15 @@ export async function requestNewAgency(input: {
   if (!agencyName || !jurisdiction) {
     return { ok: false, error: "Agency name and jurisdiction are required." };
   }
+  const supabase = createClient();
+  const { error } = await supabase.from("agency_requests").insert({
+    workspace_id: ctx.workspace.id,
+    requested_by: ctx.user.id,
+    agency_name: agencyName,
+    jurisdiction,
+    notes: input.notes?.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
   await logActivity({
     workspaceId: ctx.workspace.id,
     type: "agency",

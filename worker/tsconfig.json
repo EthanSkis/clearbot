@@ -12,6 +12,11 @@
     "isolatedModules": true,
     "types": ["node"]
   },
-  "include": ["**/*.ts", "../lib/packet-generator.ts"],
+  "include": [
+    "**/*.ts",
+    "../lib/packet-generator.ts",
+    "../lib/poa-generator.ts",
+    "../lib/crypto.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

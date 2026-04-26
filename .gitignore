@@ -33,3 +33,6 @@ dev.log
 
 # typescript
 *.tsbuildinfo
+
+# claude code local state
+.claude

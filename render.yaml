@@ -1,0 +1,29 @@
+# Deploy the ClearBot background worker on Render.
+# https://render.com/docs/blueprint-spec
+#
+# Setup:
+#   1. Push this repo to GitHub.
+#   2. Render dashboard → New → Blueprint → connect this repo.
+#   3. Set the env vars below in the Render UI (or via group sync).
+
+services:
+  - type: worker
+    name: clearbot-worker
+    runtime: docker
+    plan: starter        # starter = $7/mo, plenty for a polling worker
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CREDENTIAL_MASTER_KEY
+        sync: false
+      - key: WORKER_POLL_MS
+        value: "2000"
+      - key: WORKER_STALE_LEASE_SECONDS
+        value: "600"
+      - key: WORKER_RETRY_BASE_MS
+        value: "60000"
+    autoDeploy: true

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PageHeader, SectionHeader } from "@/components/dashboard/PageHeader";
 import { canAdmin, requireContext } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
@@ -124,7 +125,15 @@ export default async function IntegrationsPage() {
 
       <section className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
         <div>
-          <SectionHeader title="Webhooks" subtitle="Subscribe to license state changes." />
+          <div className="flex items-baseline justify-between gap-3">
+            <SectionHeader title="Webhooks" subtitle="Subscribe to license state changes." />
+            <Link
+              href="/dashboard/integrations/deliveries"
+              className="font-mono text-[11px] uppercase tracking-wider text-accent-deep hover:text-accent"
+            >
+              View deliveries →
+            </Link>
+          </div>
           <div className="mt-4">
             <WebhooksManager rows={(webhookRows ?? []) as unknown as WebhookRow[]} />
           </div>

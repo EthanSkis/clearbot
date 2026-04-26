@@ -183,13 +183,20 @@ export default async function AgenciesPage() {
 
       <section>
         <SectionHeader title="Knowledge base" subtitle="Form templates, fee schedules, agency contacts — kept current." />
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <KbCard
             title="Form templates"
             count={String((agencyCount ?? 0) * 4)}
             body="Per-agency PDFs and field mappings the packet generator fills."
             href="/dashboard/agencies/templates"
             cta="Manage templates →"
+          />
+          <KbCard
+            title="Portal credentials"
+            count="Encrypted"
+            body="Per-portal logins the worker decrypts at filing time. AES-256-GCM."
+            href="/dashboard/agencies/credentials"
+            cta="Manage vault →"
           />
           <KbCard
             title="Fee schedules"

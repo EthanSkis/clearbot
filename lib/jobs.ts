@@ -6,7 +6,8 @@ export type JobType =
   | "generate_packet"
   | "form_hash_check"
   | "submit_filing"
-  | "deliver_webhook";
+  | "deliver_webhook"
+  | "generate_poa";
 
 export type JobRow = {
   id: string;

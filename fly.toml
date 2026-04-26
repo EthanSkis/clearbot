@@ -1,0 +1,35 @@
+# Fly.io deployment for the ClearBot background worker.
+#
+# Setup:
+#   1. fly launch --no-deploy --config fly.toml --copy-config (skip if you
+#      already have a fly.toml — this file is the authoritative config)
+#   2. fly secrets set NEXT_PUBLIC_SUPABASE_URL=... \
+#         SUPABASE_SERVICE_ROLE_KEY=... \
+#         CREDENTIAL_MASTER_KEY=...
+#   3. fly deploy
+#
+# Single VM, 256MB, no public ports — the worker only talks outward.
+
+app          = "clearbot-worker"
+primary_region = "iad"
+
+[build]
+  dockerfile = "worker/Dockerfile"
+
+[env]
+  NODE_ENV                  = "production"
+  WORKER_POLL_MS            = "2000"
+  WORKER_STALE_LEASE_SECONDS = "600"
+  WORKER_RETRY_BASE_MS      = "60000"
+
+[processes]
+  worker = "node_modules/.bin/tsx run.ts"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus     = 1
+  memory   = "256mb"
+
+# No [services] block — the worker has no inbound traffic.
+# Expose nothing publicly. Uses Fly's built-in health checks via
+# process restart only.

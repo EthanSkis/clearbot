@@ -19,7 +19,8 @@ type IconName =
   | "users"
   | "plug"
   | "card"
-  | "gear";
+  | "gear"
+  | "pulse";
 
 type NavItem = {
   label: string;
@@ -47,6 +48,7 @@ const NAV: NavItem[] = [
   { label: "Team", href: "/dashboard/team", icon: "users" },
   { label: "Integrations", href: "/dashboard/integrations", icon: "plug" },
   { label: "Billing", href: "/dashboard/billing", icon: "card" },
+  { label: "System", href: "/dashboard/system", icon: "pulse" },
   { label: "Settings", href: "/dashboard/settings", icon: "gear" },
 ];
 
@@ -803,6 +805,12 @@ function NavIcon({ name }: { name: IconName }) {
         <svg {...props}>
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.22.65.22 1H21a2 2 0 0 1 0 4h-.09c-.35 0-.69.08-1 .22z" />
+        </svg>
+      );
+    case "pulse":
+      return (
+        <svg {...props}>
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
         </svg>
       );
   }
