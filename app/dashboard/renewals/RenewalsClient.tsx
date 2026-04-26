@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Pill } from "@/components/ui/Pill";
 import { useDialog } from "@/components/ui/Dialog";
 import {
@@ -38,10 +38,18 @@ export function RenewalsClient({
   agencies: AgencyOption[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filter, setFilter] = useState<"all" | "month" | "overdue">("all");
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setDrawerOpen(true);
+      router.replace("/dashboard/renewals");
+    }
+  }, [searchParams, router]);
 
   function refresh() {
     startTransition(() => router.refresh());

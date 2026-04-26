@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import clsx from "clsx";
 import { Pill } from "@/components/ui/Pill";
 
@@ -92,7 +93,17 @@ export function LicenseInventoryLive({ rows, filedYtd }: { rows: LiveLicenseRow[
             Every tracked license, across every location.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/renewals?new=1"
+            className="inline-flex items-center gap-1.5 rounded-full border border-accent bg-accent px-3.5 py-1.5 font-sans text-[12px] font-medium text-white hover:bg-accent-deep"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add license
+          </Link>
           <button
             onClick={exportCsv}
             className="inline-flex items-center gap-2 rounded-md border border-hairline bg-white px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-body hover:text-ink"
@@ -165,8 +176,18 @@ export function LicenseInventoryLive({ rows, filedYtd }: { rows: LiveLicenseRow[
           <div className="w-[88px]" />
         </div>
         {visible.length === 0 ? (
-          <div className="px-5 py-10 text-center font-mono text-[12px] text-body">
-            No licenses match this filter. Add one from the Renewals page.
+          <div className="flex flex-col items-center gap-3 px-5 py-10 text-center">
+            <div className="font-mono text-[12px] text-body">
+              {enriched.length === 0 ? "No licenses tracked yet." : "No licenses match this filter."}
+            </div>
+            {enriched.length === 0 && (
+              <Link
+                href="/dashboard/renewals?new=1"
+                className="rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white hover:bg-accent-deep"
+              >
+                + Add your first license
+              </Link>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-hairline">

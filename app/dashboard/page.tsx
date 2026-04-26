@@ -10,7 +10,7 @@ import { AutomationModePanelServer } from "@/components/dashboard/AutomationMode
 import { AgencyCoverageStripServer } from "@/components/dashboard/AgencyCoverageStripServer";
 import { FilingsInFlightServer } from "@/components/dashboard/FilingsInFlightServer";
 import { LicenseInventoryLive, type LiveLicenseRow } from "@/components/dashboard/LicenseInventoryLive";
-import { AgencyMonitorMockup } from "@/components/mockups/AgencyMonitorMockup";
+import { EmptyStateSetup } from "@/components/dashboard/EmptyStateSetup";
 import { requireContext } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import type { FilingRow } from "@/app/dashboard/filings/FilingsClient";
@@ -94,9 +94,31 @@ export default async function OverviewPage() {
 
   const licenses = licenseRows ?? [];
   const inFlightRows = (inFlight ?? []) as unknown as FilingRow[];
+  const totalLicenses = licenses.length;
+  const locCount = locationCount ?? 0;
+  const isEmpty = totalLicenses === 0;
+
+  const todayLabel = today.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const greeting = ctx.user.fullName ? ctx.user.fullName.split(" ")[0] : "there";
+
+  if (isEmpty) {
+    return (
+      <>
+        <PageHeader
+          eyebrow={`Live · synced ${todayLabel}`}
+          title={
+            <>
+              Welcome, <span className="italic">{greeting}.</span>
+            </>
+          }
+          subtitle="Three quick steps and ClearBot starts watching every renewal across every location."
+        />
+        <EmptyStateSetup hasLocations={locCount > 0} />
+      </>
+    );
+  }
 
   // Compute KPI numbers
-  const totalLicenses = licenses.length;
   const needsAttention = licenses.filter((l) => {
     if (!l.expires_at) return false;
     const days = Math.floor((new Date(l.expires_at as string).getTime() - today.getTime()) / 86_400_000);
@@ -107,71 +129,33 @@ export default async function OverviewPage() {
     return new Date(l.expires_at as string) < today;
   }).length;
 
-  // Fees routed YTD = sum of fees from filings filed this year
-  const { data: filingsThisYear } = await supabase
-    .from("filings")
-    .select("fee_cents, filed_at")
-    .eq("workspace_id", ctx.workspace.id)
-    .gte("filed_at", yearStart);
-  const feesRoutedCents = (filingsThisYear ?? []).reduce((s, r) => s + (r.fee_cents as number), 0);
-
-  // Penalty savings estimate: $5,000 per filed renewal as a rough benchmark
-  const penaltySavings = (filedYtd ?? 0) * 5000;
-
   const kpis: Kpi[] = [
-    {
-      label: "Locations tracked",
-      value: String(locationCount ?? 0),
-      delta: "+0",
-      trend: "flat",
-      tone: "neutral",
-      spark: [locationCount ?? 0, locationCount ?? 0, locationCount ?? 0, locationCount ?? 0, locationCount ?? 0],
-      sub: `across ${new Set(licenses.map((l) => (l.location as unknown as { state?: string } | null)?.state).filter(Boolean)).size} states`,
-    },
-    {
-      label: "Licenses on file",
-      value: String(totalLicenses),
-      delta: "+0",
-      trend: "flat",
-      tone: "neutral",
-      spark: [totalLicenses, totalLicenses, totalLicenses, totalLicenses, totalLicenses],
-      sub: "1,200+ canonical types covered",
-    },
     {
       label: "Needs attention",
       value: String(needsAttention),
-      delta: overdue > 0 ? `${overdue} overdue` : "—",
-      trend: needsAttention > 0 ? "up" : "flat",
+      delta: overdue > 0 ? `${overdue} overdue` : needsAttention > 0 ? `${needsAttention} due soon` : "all current",
+      trend: "flat",
       tone: overdue > 0 ? "bad" : needsAttention > 0 ? "warn" : "ok",
-      spark: [needsAttention, needsAttention, needsAttention, needsAttention, needsAttention],
-      sub: `${overdue} overdue · ${needsAttention - overdue} due soon`,
+      spark: [],
+      sub: `${overdue} overdue · ${Math.max(needsAttention - overdue, 0)} due in 30 days`,
+    },
+    {
+      label: "In flight",
+      value: String(inFlightRows.length),
+      delta: inFlightRows.length > 0 ? "being processed" : "idle",
+      trend: "flat",
+      tone: inFlightRows.length > 0 ? "neutral" : "ok",
+      spark: [],
+      sub: "intake → prep → review → submit",
     },
     {
       label: "Filed this year",
       value: String(filedYtd ?? 0),
-      delta: filedYtd ? `+${filedYtd}` : "0",
-      trend: filedYtd ? "up" : "flat",
-      tone: "ok",
-      spark: [filedYtd ?? 0, filedYtd ?? 0, filedYtd ?? 0, filedYtd ?? 0, filedYtd ?? 0],
-      sub: "100% on-time",
-    },
-    {
-      label: "Fees routed YTD",
-      value: `$${(feesRoutedCents / 100).toLocaleString()}`,
-      delta: filedYtd ? `${filedYtd} filings` : "—",
-      trend: feesRoutedCents > 0 ? "up" : "flat",
-      tone: "neutral",
-      spark: [0, feesRoutedCents / 4, feesRoutedCents / 2, feesRoutedCents * 0.75, feesRoutedCents].map((v) => v / 100),
-      sub: "across all agency payment systems",
-    },
-    {
-      label: "Penalty savings YTD",
-      value: `$${penaltySavings.toLocaleString()}`,
-      delta: "est.",
+      delta: (filedYtd ?? 0) > 0 ? "confirmed" : "—",
       trend: "flat",
       tone: "ok",
-      spark: [0, penaltySavings * 0.25, penaltySavings * 0.5, penaltySavings * 0.75, penaltySavings],
-      sub: "vs. industry lapse rate",
+      spark: [],
+      sub: "with confirmation numbers on file",
     },
   ];
 
@@ -220,7 +204,6 @@ export default async function OverviewPage() {
     }
     byState.set(code, slot);
   }
-  // Add location counts per state
   const { data: locationsByState } = await supabase
     .from("locations")
     .select("state")
@@ -239,7 +222,6 @@ export default async function OverviewPage() {
     slot.locations += 1;
     byState.set(code, slot);
   }
-  // Filed counts per state from filings table
   const { data: filedRows } = await supabase
     .from("filings")
     .select("location:location_id(state)")
@@ -283,18 +265,13 @@ export default async function OverviewPage() {
     | "prep"
     | "auto";
 
-  // Coverage strip
+  // Coverage strip — only verifiable, real-data items.
   const stateCount = new Set(licenses.map((l) => (l.location as unknown as { state?: string } | null)?.state).filter(Boolean)).size;
   const coverageItems = [
-    { label: "Coverage", value: `${stateCount} states`, sub: "active license tracking", tone: "accent" as const },
-    { label: "Agency portals", value: String(agencyCount ?? 0), sub: "polled every 90s", tone: "ink" as const },
-    { label: "Form versions", value: String((agencyCount ?? 0) * 4), sub: "tracked live", tone: "ink" as const },
-    { label: "Missed renewals", value: String(overdue), sub: overdue === 0 ? "all-time" : "needs attention", tone: overdue === 0 ? ("ok" as const) : ("ink" as const) },
-    { label: "Audit events", value: String((activity.length || 0) * 142 + (filedYtd ?? 0) * 32), sub: "exportable", tone: "ink" as const },
+    { label: "Coverage", value: `${stateCount} state${stateCount === 1 ? "" : "s"}`, sub: "active license tracking", tone: "accent" as const },
+    { label: "Agency portals", value: String(agencyCount ?? 0), sub: "polled daily", tone: "ink" as const },
+    { label: "Missed renewals", value: String(overdue), sub: overdue === 0 ? "zero so far" : "needs attention", tone: overdue === 0 ? ("ok" as const) : ("ink" as const) },
   ];
-
-  const todayLabel = today.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const greeting = ctx.user.fullName ? ctx.user.fullName.split(" ")[0] : "there";
 
   return (
     <>
@@ -305,18 +282,22 @@ export default async function OverviewPage() {
             Good {timeOfDay()}, <span className="italic">{greeting}.</span>
           </>
         }
-        subtitle={
-          totalLicenses === 0
-            ? "Welcome. Add your first location and license to start tracking renewals."
-            : `${needsAttention} renewal${needsAttention === 1 ? "" : "s"} need${needsAttention === 1 ? "s" : ""} attention. ${inFlightRows.length} filing${inFlightRows.length === 1 ? "" : "s"} in flight.`
-        }
+        subtitle={`${needsAttention} renewal${needsAttention === 1 ? "" : "s"} need${needsAttention === 1 ? "s" : ""} attention. ${inFlightRows.length} filing${inFlightRows.length === 1 ? "" : "s"} in flight.`}
         actions={
-          <Link
-            href="/dashboard/locations?new=1"
-            className="rounded-full border border-accent bg-accent px-4 py-2 font-sans text-[13px] font-medium text-white hover:bg-accent-deep"
-          >
-            + New location
-          </Link>
+          <>
+            <Link
+              href="/dashboard/locations?new=1"
+              className="rounded-full border border-hairline bg-white px-4 py-2 font-sans text-[13px] font-medium text-ink hover:bg-bgalt"
+            >
+              + New location
+            </Link>
+            <Link
+              href="/dashboard/renewals?new=1"
+              className="rounded-full border border-accent bg-accent px-4 py-2 font-sans text-[13px] font-medium text-white hover:bg-accent-deep"
+            >
+              + Add license
+            </Link>
+          </>
         }
       />
 
@@ -339,24 +320,13 @@ export default async function OverviewPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-        <div>
-          <SectionHeader
-            title="Agency engine"
-            subtitle={`${agencyCount ?? 0} federal, state, county, and municipal portals.`}
-          />
-          <div className="mt-4">
-            <AgencyMonitorMockup />
-          </div>
-        </div>
-        <div>
-          <SectionHeader
-            title="Jurisdiction load"
-            subtitle="Where your risk is concentrated this quarter."
-          />
-          <div className="mt-4">
-            <JurisdictionBreakdownServer rows={jurisdictions} />
-          </div>
+      <section>
+        <SectionHeader
+          title="Jurisdiction load"
+          subtitle="Where your risk is concentrated this quarter."
+        />
+        <div className="mt-4">
+          <JurisdictionBreakdownServer rows={jurisdictions} />
         </div>
       </section>
 

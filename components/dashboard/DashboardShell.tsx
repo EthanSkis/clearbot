@@ -305,13 +305,23 @@ export function DashboardShell({
               />
               <Link
                 href="/dashboard/locations?new=1"
-                className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
+                className="hidden items-center gap-2 rounded-full border border-hairline bg-white px-3.5 py-1.5 font-sans text-[13px] font-medium text-ink transition-colors hover:bg-bgalt md:inline-flex"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 New location
+              </Link>
+              <Link
+                href="/dashboard/renewals?new=1"
+                className="hidden items-center gap-2 rounded-full border border-accent bg-accent px-4 py-1.5 font-sans text-[13px] font-medium text-white transition-colors hover:border-accent-deep hover:bg-accent-deep md:inline-flex"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add license
               </Link>
             </div>
           </div>

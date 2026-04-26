@@ -13,8 +13,14 @@ export type Kpi = {
 };
 
 export function OverviewKpiCards({ kpis }: { kpis: Kpi[] }) {
+  const gridClass =
+    kpis.length <= 3
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-3"
+      : kpis.length === 4
+        ? "grid grid-cols-2 gap-3 md:grid-cols-4"
+        : "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6";
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    <div className={gridClass}>
       {kpis.map((k) => (
         <KpiCard key={k.label} k={k} />
       ))}
@@ -53,7 +59,7 @@ function KpiCard({ k }: { k: Kpi }) {
         <div className="font-display text-[30px] font-light leading-none tracking-[-0.01em] text-ink">
           {k.value}
         </div>
-        <Sparkline data={k.spark} tone={k.tone} />
+        {k.spark.length >= 2 && <Sparkline data={k.spark} tone={k.tone} />}
       </div>
       <div className="mt-2 truncate font-mono text-[10px] text-body">{k.sub}</div>
     </div>

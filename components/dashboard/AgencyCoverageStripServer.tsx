@@ -10,9 +10,17 @@ export type CoverageItem = {
 };
 
 export function AgencyCoverageStripServer({ items }: { items: CoverageItem[] }) {
+  const cols =
+    items.length >= 5
+      ? "md:grid-cols-5"
+      : items.length === 4
+        ? "md:grid-cols-4"
+        : items.length === 3
+          ? "md:grid-cols-3"
+          : "md:grid-cols-2";
   return (
     <section className="overflow-hidden rounded-2xl border border-hairline bg-ink text-white shadow-card">
-      <div className="grid grid-cols-2 divide-white/10 sm:grid-cols-3 md:grid-cols-5 md:divide-x">
+      <div className={`grid grid-cols-2 divide-white/10 sm:grid-cols-3 ${cols} md:divide-x`}>
         {items.map((it, i) => (
           <div
             key={it.label}
