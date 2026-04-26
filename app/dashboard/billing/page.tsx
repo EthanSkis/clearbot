@@ -4,10 +4,12 @@ import { PageHeader, SectionHeader } from "@/components/dashboard/PageHeader";
 import { canAdmin, requireContext } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import { PRICING_TIERS } from "@/lib/data";
+import { stripeStatus } from "@/lib/stripe";
 import {
   InvoicesTable,
   PaymentMethods,
   PlanSwitcher,
+  StripeStatusBanner,
   type Invoice,
   type PaymentMethod,
 } from "./BillingClient";
@@ -31,6 +33,7 @@ export default async function BillingPage() {
   const ctx = await requireContext();
   const supabase = createClient();
   const canManage = canAdmin(ctx.membership.role) || ctx.membership.role === "finance";
+  const stripe = stripeStatus();
 
   const [
     { count: locationCount },
@@ -103,8 +106,10 @@ export default async function BillingPage() {
           </>
         }
         subtitle="Per-location annual pricing. Filings, fees, and storage included — no per-filing surcharges, cancel any time."
-        actions={<PlanSwitcher currentPlan={plan} canManage={canManage} />}
+        actions={<PlanSwitcher currentPlan={plan} canManage={canManage} stripeStatus={stripe} />}
       />
+
+      <StripeStatusBanner status={stripe} />
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="rounded-2xl border border-hairline bg-white p-6 shadow-card">

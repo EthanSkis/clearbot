@@ -33,11 +33,66 @@ const PLAN_TIER: Record<string, string> = {
   professional: "Professional",
 };
 
-export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; canManage: boolean }) {
+type StripeStatus = "unconfigured" | "test" | "live";
+
+export function StripeStatusBanner({ status }: { status: StripeStatus }) {
+  if (status === "live") return null;
+  const isTest = status === "test";
+  return (
+    <div
+      className={clsx(
+        "flex flex-wrap items-start gap-3 rounded-xl border px-4 py-3 text-[13px]",
+        isTest
+          ? "border-warn/30 bg-warn/5 text-ink"
+          : "border-accent/30 bg-accent-soft/40 text-ink"
+      )}
+    >
+      <span
+        className={clsx(
+          "mt-0.5 inline-flex h-5 items-center rounded-full px-2 font-mono text-[10px] uppercase tracking-wider",
+          isTest ? "bg-warn text-white" : "bg-accent text-white"
+        )}
+      >
+        {isTest ? "Stripe · test mode" : "Self-serve billing pending"}
+      </span>
+      <div className="min-w-0 flex-1">
+        {isTest ? (
+          <>
+            Stripe is in test mode. Real charges will not be made until live keys are
+            installed.
+          </>
+        ) : (
+          <>
+            Stripe isn&apos;t wired up yet. Plan changes are applied immediately and
+            reconciled with your invoice manually — contact{" "}
+            <a
+              href="mailto:ethan@clearbot.io"
+              className="underline decoration-hairline underline-offset-2 hover:text-accent-deep"
+            >
+              ethan@clearbot.io
+            </a>{" "}
+            for upgrades or downgrades.
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function PlanSwitcher({
+  currentPlan,
+  canManage,
+  stripeStatus,
+}: {
+  currentPlan: string;
+  canManage: boolean;
+  stripeStatus: StripeStatus;
+}) {
   const router = useRouter();
   const dialog = useDialog();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const stripeReady = stripeStatus !== "unconfigured";
   return (
     <>
       <button
@@ -54,12 +109,44 @@ export function PlanSwitcher({ currentPlan, canManage }: { currentPlan: string; 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
           <div className="w-full max-w-[420px] rounded-2xl border border-hairline bg-white p-5 shadow-2xl">
             <div className="font-display text-[20px] font-light text-ink">Change plan</div>
-            <p className="mt-1 text-[13px] text-body">Pick a tier. Your next invoice will be issued at the new per-location rate.</p>
+            <p className="mt-1 text-[13px] text-body">
+              {stripeReady
+                ? "Pick a tier. You'll be redirected to Stripe checkout."
+                : "Pick a tier. Plan switches immediately — your next invoice reflects the new per-location rate."}
+            </p>
+            {!stripeReady && (
+              <div className="mt-3 rounded-md border border-accent/30 bg-accent-soft/40 px-3 py-2 font-mono text-[11px] text-ink">
+                Self-serve checkout pending Stripe setup.
+              </div>
+            )}
             <div className="mt-4 grid gap-2">
               {(["essential", "standard", "professional"] as const).map((p) => (
                 <button
                   key={p}
                   onClick={async () => {
+                    if (stripeReady) {
+                      const res = await fetch("/api/stripe/checkout", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ plan: p }),
+                      });
+                      const data = (await res.json()) as
+                        | { ok: true; url: string }
+                        | { ok: false; message?: string; error?: string };
+                      if (!res.ok || !data.ok) {
+                        await dialog.alert({
+                          title: "Could not start checkout",
+                          body:
+                            ("message" in data && data.message) ||
+                            ("error" in data && data.error) ||
+                            "Try again in a moment.",
+                          tone: "danger",
+                        });
+                        return;
+                      }
+                      window.location.href = data.url;
+                      return;
+                    }
                     const r = await changePlan(p);
                     if (!r.ok) {
                       await dialog.alert({ title: "Could not change plan", body: r.error, tone: "danger" });
