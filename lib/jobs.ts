@@ -61,8 +61,9 @@ export async function dequeueJob(workerId: string, client?: SupabaseClient): Pro
     console.error("[jobs] dequeue failed:", error);
     return null;
   }
-  if (!data) return null;
-  return data as JobRow;
+  const row: JobRow | null = Array.isArray(data) ? (data[0] ?? null) : (data as JobRow | null);
+  if (!row || !row.id) return null;
+  return row;
 }
 
 export async function markJobDone(

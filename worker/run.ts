@@ -26,8 +26,11 @@ async function dequeue(): Promise<JobRow | null> {
     console.error("[worker] dequeue error:", error);
     return null;
   }
-  if (!data) return null;
-  return data as JobRow;
+  // dequeue_job returns "setof public.jobs" — an array. Empty queue → [].
+  // Tolerate the legacy single-row shape too in case migration is mid-flight.
+  const row: JobRow | null = Array.isArray(data) ? (data[0] ?? null) : (data as JobRow | null);
+  if (!row || !row.id) return null;
+  return row;
 }
 
 async function markDone(jobId: string, result: Record<string, unknown> | null) {
