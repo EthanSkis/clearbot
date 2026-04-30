@@ -13,18 +13,19 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     redirect("/login?next=/dashboard");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, role, company")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const { data: memberships } = await supabase
-    .from("workspace_members")
-    .select("id, workspace_id, role, scope, status, workspaces:workspace_id(id, name, plan, settings)")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: true });
+  const [{ data: profile }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, role, company")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("workspace_members")
+      .select("id, workspace_id, role, scope, status, workspaces:workspace_id(id, name, plan, settings)")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true }),
+  ]);
 
   if (!memberships || memberships.length === 0) {
     redirect("/onboarding");

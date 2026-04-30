@@ -25,10 +25,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh the session if expired — required for Server Components.
+  // Read the cookie-bound session locally — `getSession()` does not hit
+  // Supabase Auth, so the middleware doesn't add a network round-trip per
+  // request. The dashboard layout still verifies the user with `getUser()`,
+  // which is the actual security boundary for protected routes.
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   const { pathname, search } = request.nextUrl;
 
