@@ -16,7 +16,7 @@ export const STATES: StateInfo[] = [
   { code: "VT", name: "Vermont", col: 10, row: 1, covered: true, agencies: 5, licenses: 88, topLicense: "Liquor license (Class 1)" },
   { code: "NH", name: "New Hampshire", col: 11, row: 1, covered: true, agencies: 5, licenses: 104, topLicense: "Health permit" },
   { code: "WA", name: "Washington", col: 1, row: 2, covered: true, agencies: 11, licenses: 612, topLicense: "WA Liquor & Cannabis Board" },
-  { code: "ID", name: "Idaho", col: 2, row: 2, covered: true, agencies: 6, licenses: 198, topLicense: "ITD freight permit" },
+  { code: "ID", name: "Idaho", col: 2, row: 2, covered: true, agencies: 7, licenses: 198, topLicense: "ISLD retail liquor license" },
   { code: "MT", name: "Montana", col: 3, row: 2, covered: false, notes: "Coming Q3 2026" },
   { code: "ND", name: "North Dakota", col: 4, row: 2, covered: false, notes: "Coming Q3 2026" },
   { code: "MN", name: "Minnesota", col: 5, row: 2, covered: true, agencies: 9, licenses: 384, topLicense: "Food handler license" },
