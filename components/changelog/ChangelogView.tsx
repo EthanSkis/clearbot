@@ -90,7 +90,7 @@ export function ChangelogView() {
 
   return (
     <div className="space-y-8">
-      <div className="sticky top-[72px] z-10 -mx-6 flex flex-col gap-3 border-b border-hairline bg-bg/90 px-6 py-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+      <div className="sticky top-[72px] z-10 -mx-6 flex flex-col gap-3 border-b border-hairline bg-bg/95 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:bg-bg/90 sm:backdrop-blur-sm">
         <div className="relative flex-1 max-w-[360px]">
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 text-body"

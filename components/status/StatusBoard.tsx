@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import clsx from "clsx";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 type Health = "operational" | "degraded" | "outage" | "maintenance";
 
@@ -248,17 +249,15 @@ function durationMin(startIso: string, endIso: string | null) {
   return Math.max(1, Math.round((end - start) / 60000));
 }
 
-function useNow(intervalMs = 30000) {
+function useNow(intervalMs: number, ref: RefObject<Element>) {
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
+  useVisibleInterval(() => setNow(Date.now()), intervalMs, ref);
   return now;
 }
 
 export function StatusBoard() {
-  const now = useNow(30000);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const now = useNow(30000, containerRef);
   const [filter, setFilter] = useState<"all" | "90d" | "30d">("90d");
   const [subscribed, setSubscribed] = useState(false);
   const [email, setEmail] = useState("");
@@ -282,7 +281,7 @@ export function StatusBoard() {
   const barDays = filter === "30d" ? 30 : 90;
 
   return (
-    <div className="space-y-10">
+    <div ref={containerRef} className="space-y-10">
       <header className="space-y-5">
         <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-body">
           <span className="relative flex h-2 w-2">

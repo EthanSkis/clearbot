@@ -103,7 +103,7 @@ export default function ProductPage() {
                 </div>
               </Reveal>
               <Reveal delay={0.05}>
-                <h2 className="mt-3 font-display text-[clamp(30px,3.4vw,42px)] font-light leading-[1.05] tracking-[-0.01em] text-ink">
+                <h2 className="mt-3 font-display text-[clamp(26px,3.4vw,42px)] font-light leading-[1.05] tracking-[-0.01em] text-ink">
                   Agencies <span className="italic">change.</span>
                   <br />
                   ClearBot notices first.

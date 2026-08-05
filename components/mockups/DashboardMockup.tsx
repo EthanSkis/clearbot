@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
 import { LiveDot } from "@/components/ui/LiveDot";
 import { Pill } from "@/components/ui/Pill";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 import {
   SEED_ROWS,
   statusFor,
@@ -45,11 +46,12 @@ export function DashboardMockup({
 } = {}) {
   const [rows, setRows] = useState<LicenseRow[]>(SEED_ROWS);
   const [tick, setTick] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const visible = filterRows ? filterRows(rows) : rows;
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
+  useVisibleInterval(
+    () => {
       setTick((t) => t + 1);
       setRows((prev) => {
         const idx = Math.floor(Math.random() * prev.length);
@@ -62,12 +64,13 @@ export function DashboardMockup({
             : r
         );
       });
-    }, 1000);
-    return () => window.clearInterval(id);
-  }, []);
+    },
+    1000,
+    containerRef
+  );
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       {/* outer card */}
       <div className="overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg">
         {/* header bar */}

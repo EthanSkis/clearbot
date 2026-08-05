@@ -1,8 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
+import { useVisibleInterval } from "@/hooks/useVisibleInterval";
 
 type Stage = 0 | 1 | 2;
 
@@ -18,16 +19,18 @@ const HIGHLIGHTED = [3, 9, 14, 18, 23, 27];
 
 export function OnboardingMockup() {
   const [stage, setStage] = useState<Stage>(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
+  useVisibleInterval(
+    () => {
       setStage((s) => ((s + 1) % 3) as Stage);
-    }, 4200);
-    return () => window.clearInterval(id);
-  }, []);
+    },
+    4200,
+    containerRef
+  );
 
   return (
-    <div className="relative h-[420px] w-full overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg sm:h-[460px]">
+    <div ref={containerRef} className="relative h-[420px] w-full overflow-hidden rounded-2xl border border-hairline bg-white shadow-card-lg sm:h-[460px]">
       {/* header */}
       <div className="flex items-center justify-between border-b border-hairline bg-bgalt/60 px-5 py-3">
         <span className="font-mono text-[11px] uppercase tracking-wider text-body">
